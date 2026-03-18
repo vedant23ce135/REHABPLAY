@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shoulder & Posture Rehab</title>
+    <script>
+        // Block mobile devices
+        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            document.body.innerHTML = '<div style="padding: 40px; text-align: center;"><h1>❌ Desktop Only</h1><p>Laptop/Desktop required</p></div>';
+            throw new Error('Mobile blocked');
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+            height: 100vh;
+        }
+        .container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #output-canvas {
+            position: absolute;
+            transform: scaleX(-1);
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            max-width: 95%;
+            max-height: 95%;
+        }
+        .video-input {
+            display: none;
+        }
+        .ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(15, 23, 42, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            color: white;
+            min-width: 280px;
+            border: 2px solid rgba(102, 126, 234, 0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .ui-panel h2 {
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            color: #667eea;
+        }
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            margin: 12px 0;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+        }
+        .stat-label {
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+        .stat-value {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #00f2fe;
+        }
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+        }
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+        .btn-secondary {
+            background: #f093fb;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #e17ae6;
+            transform: translateY(-2px);
+        }
+        .btn-reset {
+            background: #ef4444;
+            color: white;
+        }
+        .btn-reset:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+        }
+        .exercise-mode {
+            background: rgba(102, 126, 234, 0.2);
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 15px;
+            text-align: center;
+            border: 2px solid #667eea;
+        }
+        .feedback {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 3rem;
+            font-weight: bold;
+            color: #00f2fe;
+            text-shadow: 0 0 20px rgba(0, 242, 254, 0.8);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .feedback.show {
+            opacity: 1;
+        }
+        .loading {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            text-align: center;
+            color: white;
+            z-index: 10;
+        }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Loading camera and AI models...</p>
+        </div>
+        <video class="video-input" id="video" autoplay playsinline></video>
+        <canvas id="output-canvas"></canvas>
+        
+        <div class="ui-panel">
+            <h2>💪 Shoulder Rehab</h2>
+            <div class="stat">
+                <span class="stat-label">Reps:</span>
+                <span class="stat-value" id="reps">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Score:</span>
+                <span class="stat-value" id="score">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Angle:</span>
+                <span class="stat-value" id="angle">--°</span>
+            </div>
+            <div class="exercise-mode" id="mode">
+                Shoulder Raises
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" onclick="setExercise('shoulder')">Shoulder Raises</button>
+            <button class="btn btn-secondary" onclick="setExercise('squat')">Sit-to-Stand</button>
+            <button class="btn btn-reset" onclick="resetStats()">Reset</button>
+        </div>
+
+        <div class="feedback" id="feedback"></div>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('video');
+        const canvasElement = document.getElementById('output-canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const loading = document.getElementById('loading');
+        let cameraInstance = null;
+
+        // Game State
+        let state = {
+            exercise: 'shoulder',
+            reps: 0,
+            score: 0,
+            stage: null,
+            angle: 0
+        };
+
+        // Calculate angle between three points
+        function calculateAngle(a, b, c) {
+            const radians = Math.atan2(c.y - b.y, c.x - b.x) - 
+                           Math.atan2(a.y - b.y, a.x - b.x);
+            let angle = Math.abs(radians * 180.0 / Math.PI);
+            if (angle > 180.0) angle = 360 - angle;
+            return angle;
+        }
+
+        // Update UI
+        function updateUI() {
+            document.getElementById('reps').textContent = state.reps;
+            document.getElementById('score').textContent = state.score;
+            document.getElementById('angle').textContent = Math.round(state.angle) + '°';
+        }
+
+        // Show feedback
+        function showFeedback(text) {
+            const feedback = document.getElementById('feedback');
+            feedback.textContent = text;
+            feedback.classList.add('show');
+            setTimeout(() => feedback.classList.remove('show'), 1000);
+        }
+
+        // Set exercise mode
+        function setExercise(mode) {
+            state.exercise = mode;
+            state.stage = null;
+            document.getElementById('mode').textContent = 
+                mode === 'shoulder' ? 'Shoulder Raises' : 'Sit-to-Stand';
+        }
+
+        // Reset statistics
+        function resetStats() {
+            state.reps = 0;
+            state.score = 0;
+            state.stage = null;
+            updateUI();
+            showFeedback('Reset!');
+        }
+
+        // Flag to track if we've received first frame
+        let firstFrameReceived = false;
+
+        // Process pose results
+        function onResults(results) {
+            if (!firstFrameReceived) {
+                firstFrameReceived = true;
+                loading.style.display = 'none';
+                console.log('✅ First frame received, hiding loading screen');
+            }
+            
+            console.log('📊 onResults called');  // DEBUG
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            // Draw camera feed
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.poseLandmarks) {
+                // Draw landmarks
+                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS,
+                             {color: 'rgba(0, 255, 180, 0.8)', lineWidth: 4});
+                drawLandmarks(canvasCtx, results.poseLandmarks,
+                            {color: 'rgba(255, 220, 0, 0.8)', lineWidth: 2, radius: 6});
+
+                // Get landmarks
+                const landmarks = results.poseLandmarks;
+                
+                if (state.exercise === 'shoulder') {
+                    // Shoulder raise exercise (right arm)
+                    const shoulder = landmarks[12]; // Right shoulder
+                    const elbow = landmarks[14]; // Right elbow
+                    const wrist = landmarks[16]; // Right wrist
+
+                    state.angle = calculateAngle(shoulder, elbow, wrist);
+
+                    // Rep detection
+                    if (state.angle > 160) {
+                        if (state.stage !== 'up') {
+                            state.stage = 'up';
+                        }
+                    }
+                    if (state.angle < 90 && state.stage === 'up') {
+                        state.stage = 'down';
+                        state.reps += 1;
+                        state.score += 10;
+                        showFeedback('Great! +10');
+                    }
+                } else if (state.exercise === 'squat') {
+                    // Sit-to-stand exercise (left leg)
+                    const hip = landmarks[23]; // Left hip
+                    const knee = landmarks[25]; // Left knee
+                    const ankle = landmarks[27]; // Left ankle
+
+                    state.angle = calculateAngle(hip, knee, ankle);
+
+                    // Rep detection
+                    if (state.angle > 160) {
+                        if (state.stage !== 'stand') {
+                            state.stage = 'stand';
+                        }
+                    }
+                    if (state.angle < 120 && state.stage === 'stand') {
+                        state.stage = 'sit';
+                        state.reps += 1;
+                        state.score += 15;
+                        showFeedback('Excellent! +15');
+                    }
+                }
+
+                updateUI();
+            }
+
+            canvasCtx.restore();
+        }
+
+        // Initialize MediaPipe Pose
+        console.log('🤖 Initializing MediaPipe Pose...');  // DEBUG
+        const pose = new Pose({
+            locateFile: (file) => {
+                console.log('📦 Loading model file:', file);  // DEBUG
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+            }
+        });
+
+        console.log('⚙️ Setting pose options...');  // DEBUG
+        pose.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            enableSegmentation: false,
+            smoothSegmentation: false,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+        console.log('✅ Pose options set');  // DEBUG
+
+        pose.onResults(onResults);
+
+        // Initialize camera
+        function initializeCamera() {
+            console.log('🎥 === CAMERA INITIALIZATION START ===');
+            console.log('📺 Video element:', videoElement);
+            console.log('🖼️ Canvas element:', canvasElement);
+            
+            const cameraConfig = {
+                onFrame: async () => {
+                    await pose.send({image: videoElement});
+                },
+                width: 1280,
+                height: 720
+            };
+            
+            console.log('📷 Creating Camera instance...');  // DEBUG
+            cameraInstance = new Camera(videoElement, cameraConfig);
+            console.log('✅ Camera instance created:', cameraInstance);  // DEBUG
+
+            // Start with error handling and timeout
+            console.log('⏱️ Setting 3-second timeout...');  // DEBUG
+            let loadingTimeout = setTimeout(() => {
+                loading.style.display = 'none';
+                canvasElement.width = videoElement.videoWidth || 1280;
+                canvasElement.height = videoElement.videoHeight || 720;
+                console.log('✅ Game started (timeout)');
+            }, 3000);
+
+            console.log('🚀 Calling camera.start()...');  // DEBUG
+            cameraInstance.start()
+                .then(() => {
+                    console.log('✅ CAMERA START SUCCESS');  // DEBUG
+                    clearTimeout(loadingTimeout);
+                    loading.style.display = 'none';
+                    canvasElement.width = videoElement.videoWidth || 1280;
+                    canvasElement.height = videoElement.videoHeight || 720;
+                    console.log('✅ Camera started successfully');
+                })
+                .catch((error) => {
+                    console.error('❌ CAMERA START FAILED:', error);  // DEBUG
+                    clearTimeout(loadingTimeout);
+                    console.error('❌ Camera error details:', error);
+                    loading.style.display = 'none';
+                    setTimeout(() => { alert('Camera error: ' + error.message); }, 500);
+                });
+        }
+        
+        // Initialize on page load
+        console.log('📄 Page loaded, starting initialization...');  // DEBUG
+        initializeCamera();
+    </script>
+</body>
+</html>

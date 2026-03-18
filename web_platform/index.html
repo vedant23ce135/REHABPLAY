@@ -1,0 +1,2233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RehabPlay Arcade</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Monoton&family=Rajdhani:wght@400;500;700&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vanilla-tilt@1.8.1/dist/vanilla-tilt.min.js"></script>
+    <script>
+        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:Arial,sans-serif;"><h1>Desktop Only</h1><p>Please open on a laptop or desktop with camera access.</p></div>';
+            throw new Error('Mobile blocked');
+        }
+    </script>
+    <style>
+        :root {
+            --bg-1: #050912;
+            --bg-2: #0b1222;
+            --neon-cyan: #2cf4ff;
+            --neon-green: #ccff4d;
+            --neon-rose: #ff4f9f;
+            --text: #eaf6ff;
+            --muted: #95a8bd;
+            --panel: rgba(14, 22, 40, 0.75);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            min-height: 100%;
+            overflow-x: hidden;
+            background: radial-gradient(circle at 22% 12%, #1d1337 0%, transparent 36%), radial-gradient(circle at 78% 0%, #083546 0%, transparent 42%), linear-gradient(160deg, var(--bg-1), var(--bg-2));
+            color: var(--text);
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        body.intro-active,
+        body.intro-transition {
+            overflow: hidden;
+        }
+
+        .aurora {
+            position: fixed;
+            inset: -25%;
+            pointer-events: none;
+            z-index: 0;
+            background:
+                radial-gradient(circle at 20% 20%, rgba(255, 79, 159, 0.18), transparent 40%),
+                radial-gradient(circle at 70% 30%, rgba(44, 244, 255, 0.2), transparent 45%),
+                radial-gradient(circle at 45% 85%, rgba(204, 255, 77, 0.13), transparent 42%);
+            filter: blur(40px);
+            animation: auroraShift 14s ease-in-out infinite alternate;
+        }
+
+        @keyframes auroraShift {
+            0% { transform: translate3d(0, 0, 0) scale(1); }
+            100% { transform: translate3d(3%, -2%, 0) scale(1.08); }
+        }
+
+        .starfield {
+            position: fixed;
+            inset: 0;
+            z-index: 2;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .star {
+            position: absolute;
+            width: var(--size, 2px);
+            height: var(--size, 2px);
+            border-radius: 50%;
+            background: rgba(232, 248, 255, 0.9);
+            opacity: var(--alpha, 0.65);
+            transform: translateZ(0);
+            box-shadow: 0 0 calc(var(--size, 2px) * 3) rgba(133, 229, 255, 0.55);
+            transition: opacity 0.25s ease;
+            animation: starIdle var(--drift, 7s) ease-in-out infinite;
+            animation-delay: var(--delay, 0s);
+        }
+
+        .star.large {
+            background: rgba(255, 244, 197, 0.95);
+            box-shadow: 0 0 8px rgba(255, 244, 197, 0.75);
+        }
+
+        .star.twinkle {
+            animation: starTwinkle 0.45s ease-in-out;
+        }
+
+        @keyframes starIdle {
+            0%, 100% {
+                transform: translateY(0) scale(1);
+                opacity: var(--alpha, 0.65);
+            }
+            50% {
+                transform: translateY(-2px) scale(1.07);
+                opacity: calc(var(--alpha, 0.65) + 0.2);
+            }
+        }
+
+        @keyframes starTwinkle {
+            0% {
+                transform: scale(1);
+                opacity: 0.8;
+                box-shadow: 0 0 6px rgba(133, 229, 255, 0.6);
+            }
+            45% {
+                transform: scale(1.9);
+                opacity: 1;
+                box-shadow: 0 0 16px rgba(255, 255, 255, 0.95);
+            }
+            100% {
+                transform: scale(1);
+                opacity: var(--alpha, 0.65);
+                box-shadow: 0 0 calc(var(--size, 2px) * 3) rgba(133, 229, 255, 0.55);
+            }
+        }
+
+        .shooting-star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            border-radius: 999px;
+            background: #ffffff;
+            opacity: 0;
+            pointer-events: none;
+            transform: rotate(var(--angle, -30deg));
+            filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.95));
+            will-change: transform, opacity;
+        }
+
+        .shooting-star::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: -140px;
+            width: 140px;
+            height: 1.5px;
+            transform: translateY(-50%);
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(173, 236, 255, 0.95), rgba(255, 255, 255, 0));
+        }
+
+        .shooting-star.animate {
+            animation: shootingStarMove var(--dur, 1.2s) ease-out forwards;
+        }
+
+        @keyframes shootingStarMove {
+            0% {
+                opacity: 0;
+                transform: translate3d(0, 0, 0) rotate(var(--angle, -30deg)) scale(0.8);
+            }
+            10% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+                transform: translate3d(var(--dx, 420px), var(--dy, 180px), 0) rotate(var(--angle, -30deg)) scale(1);
+            }
+        }
+
+        .main {
+            position: relative;
+            z-index: 5;
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 30px 20px 50px;
+            opacity: 0;
+            transform: translateY(16px) scale(1.01);
+        }
+
+        body.dashboard-ready .main {
+            opacity: 1;
+            transform: none;
+            transition: opacity 0.45s ease, transform 0.45s ease;
+        }
+
+        .topbar {
+            position: relative;
+            z-index: 40;
+            overflow: visible;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 26px;
+            padding: 14px 18px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(24, 36, 63, 0.8), rgba(10, 16, 34, 0.82));
+            border: 1px solid rgba(44, 244, 255, 0.28);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 16px 30px rgba(0, 0, 0, 0.35);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-badge {
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            font-size: 23px;
+            background: linear-gradient(140deg, rgba(44, 244, 255, 0.28), rgba(255, 79, 159, 0.28));
+            border: 1px solid rgba(44, 244, 255, 0.35);
+            box-shadow: 0 0 22px rgba(44, 244, 255, 0.35);
+        }
+
+        .brand h1 {
+            font-family: Monoton, cursive;
+            font-size: clamp(1.2rem, 2vw, 1.8rem);
+            font-weight: 400;
+            letter-spacing: 1.5px;
+            color: #dff8ff;
+            text-shadow: 0 0 12px rgba(44, 244, 255, 0.8);
+        }
+
+        .home-btn {
+            border: 1px solid rgba(204, 255, 77, 0.5);
+            background: rgba(204, 255, 77, 0.15);
+            color: #ebffd2;
+            border-radius: 999px;
+            padding: 10px 18px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .home-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 22px rgba(204, 255, 77, 0.2);
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .patient-controls {
+            position: relative;
+            z-index: 45;
+            overflow: visible;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(44, 244, 255, 0.3);
+            background: rgba(8, 18, 38, 0.8);
+        }
+
+        .patient-controls label {
+            font-size: 0.78rem;
+            color: #b8d5ea;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+        }
+
+        .patient-input {
+            width: 180px;
+            border: 1px solid rgba(44, 244, 255, 0.34);
+            background: rgba(255, 255, 255, 0.08);
+            color: #eefaff;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 0.84rem;
+            outline: none;
+        }
+
+        .patient-input::placeholder {
+            color: #9cb2c7;
+        }
+
+        .patient-input:focus {
+            border-color: rgba(204, 255, 77, 0.65);
+            box-shadow: 0 0 0 2px rgba(204, 255, 77, 0.2);
+        }
+
+        .patient-save-btn {
+            border: 1px solid rgba(44, 244, 255, 0.42);
+            background: rgba(44, 244, 255, 0.14);
+            color: #dffbff;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .patient-search-btn {
+            border: 1px solid rgba(204, 255, 77, 0.5);
+            background: rgba(204, 255, 77, 0.14);
+            color: #ebffd2;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .patient-tag {
+            border: 1px solid rgba(255, 79, 159, 0.45);
+            background: rgba(255, 79, 159, 0.14);
+            color: #ffd7ea;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 0.76rem;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+        }
+
+        .patient-search-results {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            right: 0;
+            z-index: 120;
+            border-radius: 12px;
+            border: 1px solid rgba(44, 244, 255, 0.24);
+            background: rgba(8, 16, 32, 0.95);
+            box-shadow: 0 14px 24px rgba(0, 0, 0, 0.36);
+            max-height: 240px;
+            overflow: auto;
+            padding: 8px;
+            display: none;
+        }
+
+        .patient-search-results.show {
+            display: grid;
+            gap: 6px;
+        }
+
+        .patient-search-item {
+            width: 100%;
+            text-align: left;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            color: #d9f6ff;
+            border-radius: 8px;
+            padding: 8px 10px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .patient-search-item:hover {
+            border-color: rgba(44, 244, 255, 0.4);
+            background: rgba(44, 244, 255, 0.09);
+        }
+
+        .patient-search-meta {
+            color: #9db0c4;
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+
+        .hero {
+            border-radius: 20px;
+            border: 1px solid rgba(44, 244, 255, 0.25);
+            background: linear-gradient(145deg, rgba(18, 30, 54, 0.82), rgba(8, 14, 28, 0.86));
+            padding: clamp(22px, 3vw, 34px);
+            margin-bottom: 24px;
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            inset: -30% 30% auto -35%;
+            height: 250px;
+            background: radial-gradient(circle, rgba(44, 244, 255, 0.2), transparent 72%);
+            pointer-events: none;
+        }
+
+        .hero h2 {
+            font-family: Rajdhani, sans-serif;
+            font-size: clamp(1.8rem, 4vw, 3rem);
+            line-height: 1.05;
+            letter-spacing: 0.6px;
+            margin-bottom: 10px;
+        }
+
+        .hero h2 span {
+            color: var(--neon-cyan);
+            text-shadow: 0 0 16px rgba(44, 244, 255, 0.55);
+        }
+
+        .hero p {
+            color: var(--muted);
+            margin-bottom: 18px;
+            max-width: 62ch;
+            line-height: 1.6;
+        }
+
+        .hero-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .hero-chips span {
+            border: 1px solid rgba(44, 244, 255, 0.3);
+            background: rgba(44, 244, 255, 0.1);
+            color: #dbfaff;
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 600;
+        }
+
+        .score-panel {
+            border-radius: 16px;
+            background: linear-gradient(165deg, rgba(17, 29, 56, 0.82), rgba(10, 15, 28, 0.95));
+            border: 1px solid rgba(255, 79, 159, 0.25);
+            padding: 18px;
+            display: grid;
+            align-content: center;
+            gap: 12px;
+        }
+
+        .progress-panel {
+            border-radius: 20px;
+            border: 1px solid rgba(44, 244, 255, 0.24);
+            background: linear-gradient(145deg, rgba(12, 20, 39, 0.86), rgba(8, 12, 24, 0.95));
+            padding: 18px;
+            margin-bottom: 24px;
+            box-shadow: 0 16px 28px rgba(0, 0, 0, 0.3);
+        }
+
+        .progress-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .progress-head h3 {
+            font-family: Rajdhani, sans-serif;
+            font-size: 1.4rem;
+            letter-spacing: 0.4px;
+        }
+
+        .progress-subtitle {
+            font-size: 0.82rem;
+            color: #9eb4c8;
+            margin-top: 2px;
+        }
+
+        .progress-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .mini-btn {
+            border: 1px solid rgba(44, 244, 255, 0.35);
+            background: rgba(44, 244, 255, 0.12);
+            color: #dbfaff;
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            cursor: pointer;
+            transition: transform 0.18s ease;
+        }
+
+        .mini-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .mini-btn.warn {
+            border-color: rgba(255, 121, 121, 0.5);
+            background: rgba(255, 79, 79, 0.15);
+            color: #ffd7d7;
+        }
+
+        .progress-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .progress-kpi {
+            border-radius: 12px;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .progress-kpi p {
+            color: #9db0c5;
+            font-size: 0.72rem;
+            margin-bottom: 4px;
+            letter-spacing: 0.2px;
+            text-transform: uppercase;
+        }
+
+        .progress-kpi strong {
+            color: #e8fbff;
+            font-size: 1.12rem;
+            font-family: Rajdhani, sans-serif;
+        }
+
+        .progress-lists {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .progress-list-box {
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.025);
+            padding: 12px;
+            min-height: 140px;
+        }
+
+        .progress-list-box h4 {
+            font-family: Rajdhani, sans-serif;
+            margin-bottom: 10px;
+            font-size: 1.02rem;
+            color: #d9f6ff;
+        }
+
+        .leaderboard-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .leaderboard-filter {
+            border: 1px solid rgba(44, 244, 255, 0.35);
+            background: rgba(44, 244, 255, 0.1);
+            color: #dbfaff;
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            outline: none;
+        }
+
+        .progress-list {
+            list-style: none;
+            display: grid;
+            gap: 8px;
+            max-height: 168px;
+            overflow: auto;
+            padding-right: 2px;
+        }
+
+        .progress-list li {
+            font-size: 0.82rem;
+            color: #bdd0e3;
+            padding: 8px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.035);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .progress-list li span:last-child {
+            color: #dffbff;
+            font-weight: 700;
+        }
+
+        .session-time {
+            display: block;
+            color: #90a5bb;
+            font-size: 0.72rem;
+            margin-top: 3px;
+        }
+
+        .leaderboard-list li {
+            align-items: center;
+        }
+
+        .leader-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .rank-badge {
+            min-width: 26px;
+            height: 26px;
+            border-radius: 999px;
+            display: grid;
+            place-items: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.12);
+            color: #eaf6ff;
+        }
+
+        .rank-badge.rank-1 {
+            background: rgba(255, 215, 0, 0.2);
+            color: #ffe28c;
+        }
+
+        .rank-badge.rank-2 {
+            background: rgba(192, 192, 192, 0.2);
+            color: #f0f0f0;
+        }
+
+        .rank-badge.rank-3 {
+            background: rgba(205, 127, 50, 0.22);
+            color: #ffd2ac;
+        }
+
+        .leader-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .leader-points {
+            color: #ccff4d;
+            font-weight: 700;
+        }
+
+        .empty-text {
+            color: #8ca2b8;
+            font-size: 0.82rem;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .metric strong {
+            color: #dff8ff;
+        }
+
+        .metric .value {
+            color: var(--neon-green);
+            text-shadow: 0 0 10px rgba(204, 255, 77, 0.45);
+            font-weight: 700;
+        }
+
+        .section-title {
+            font-family: Rajdhani, sans-serif;
+            font-size: 1.55rem;
+            letter-spacing: 0.5px;
+            margin: 12px 0 14px;
+        }
+
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 18px;
+            margin-bottom: 26px;
+            align-items: stretch;
+        }
+
+        .game-card {
+            border-radius: 18px;
+            overflow: hidden;
+            background: linear-gradient(170deg, rgba(16, 28, 53, 0.9), rgba(8, 14, 27, 0.92));
+            border: 1px solid rgba(44, 244, 255, 0.2);
+            box-shadow: 0 14px 25px rgba(0, 0, 0, 0.33);
+            transform-style: preserve-3d;
+            will-change: transform;
+            opacity: 1;
+            visibility: visible;
+            display: block;
+        }
+
+        .game-thumb {
+            min-height: 180px;
+            display: grid;
+            place-items: center;
+            font-size: 62px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .game-thumb::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(120deg, transparent 20%, rgba(255, 255, 255, 0.22) 50%, transparent 80%);
+            transform: translateX(-120%);
+            animation: thumbShine 3.4s linear infinite;
+        }
+
+        @keyframes thumbShine {
+            to { transform: translateX(120%); }
+        }
+
+        .thumb-1 { background: linear-gradient(135deg, #3161ff, #7b34ff); }
+        .thumb-2 { background: linear-gradient(135deg, #ff3f86, #ff8a3d); }
+        .thumb-3 { background: linear-gradient(135deg, #00a9ff, #00e5b1); }
+
+        .game-content {
+            padding: 18px;
+            display: grid;
+            gap: 10px;
+        }
+
+        .game-content h4 {
+            font-size: 1.22rem;
+            font-family: Rajdhani, sans-serif;
+        }
+
+        .game-content p {
+            color: #a7b8cb;
+            font-size: 0.92rem;
+            line-height: 1.5;
+        }
+
+        .tag-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .tag {
+            font-size: 0.74rem;
+            border-radius: 999px;
+            border: 1px solid rgba(44, 244, 255, 0.24);
+            background: rgba(44, 244, 255, 0.12);
+            padding: 5px 10px;
+            color: #dff9ff;
+            letter-spacing: 0.35px;
+        }
+
+        .play-btn {
+            margin-top: 2px;
+            border: none;
+            border-radius: 10px;
+            padding: 11px 14px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: #11222b;
+            background: linear-gradient(90deg, var(--neon-cyan), #98fff5);
+            cursor: pointer;
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .play-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 18px rgba(44, 244, 255, 0.3);
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .feature-box {
+            border-radius: 12px;
+            padding: 14px 12px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .feature-box i {
+            color: var(--neon-cyan);
+            font-size: 1.15rem;
+            margin-bottom: 8px;
+        }
+
+        .feature-box p {
+            color: #b8c7d8;
+            font-size: 0.84rem;
+        }
+
+        .intro-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 20;
+            display: grid;
+            place-items: center;
+            background:
+                radial-gradient(circle at 50% 5%, rgba(255, 79, 159, 0.14), transparent 38%),
+                radial-gradient(circle at 80% 20%, rgba(44, 244, 255, 0.16), transparent 42%),
+                linear-gradient(180deg, rgba(11, 6, 22, 0.48), rgba(4, 8, 22, 0.68) 72%);
+        }
+
+        .intro-shell {
+            position: relative;
+            width: min(92vw, 740px);
+            height: min(86vh, 860px);
+            display: grid;
+            place-items: center;
+        }
+
+        .intro-title {
+            position: absolute;
+            top: 1%;
+            text-align: center;
+            width: 100%;
+            z-index: 2;
+        }
+
+        .intro-title h2 {
+            font-family: Monoton, cursive;
+            font-weight: 400;
+            letter-spacing: 2px;
+            font-size: clamp(1.3rem, 3.3vw, 2.4rem);
+            color: #e8fbff;
+            text-shadow: 0 0 20px rgba(44, 244, 255, 0.88);
+        }
+
+        .intro-title p {
+            color: #b6cae5;
+            margin-top: 8px;
+            font-size: clamp(0.65rem, 1.3vw, 0.9rem);
+            letter-spacing: 1.3px;
+            text-transform: uppercase;
+        }
+
+        .cabinet {
+            width: min(84%, 610px);
+            height: 78%;
+            border-radius: 26px;
+            position: relative;
+            background: linear-gradient(160deg, #2d3655 0%, #141c32 38%, #0a0f1e 100%);
+            border: 1px solid rgba(44, 244, 255, 0.32);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 26px 80px rgba(0, 0, 0, 0.56);
+            overflow: hidden;
+            transform-style: preserve-3d;
+        }
+
+        .marquee {
+            position: absolute;
+            top: 7%;
+            left: 8%;
+            right: 8%;
+            height: 12%;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(90deg, rgba(255, 79, 159, 0.86), rgba(44, 244, 255, 0.85));
+            box-shadow: 0 0 24px rgba(44, 244, 255, 0.35);
+        }
+
+        .marquee strong {
+            font-family: Rajdhani, sans-serif;
+            font-size: clamp(0.72rem, 1.6vw, 1rem);
+            letter-spacing: 1.8px;
+            color: #081220;
+        }
+
+        .screen-shell {
+            position: absolute;
+            left: 10%;
+            right: 10%;
+            top: 24%;
+            bottom: 30%;
+            border-radius: 16px;
+            padding: 12px;
+            background: linear-gradient(150deg, #2b3553, #131a2c);
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.62), 0 0 20px rgba(44, 244, 255, 0.2);
+        }
+
+        .screen {
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+            border: 2px solid rgba(44, 244, 255, 0.45);
+            background:
+                radial-gradient(circle at 50% 28%, rgba(44, 244, 255, 0.22), transparent 53%),
+                linear-gradient(180deg, #0a3046, #04131f 70%);
+            display: grid;
+            place-items: center;
+            text-align: center;
+            color: #b5f7ff;
+            font-family: Rajdhani, sans-serif;
+            letter-spacing: 1px;
+            text-shadow: 0 0 10px rgba(44, 244, 255, 0.6);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .screen::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.07) 0, rgba(255, 255, 255, 0.07) 1px, transparent 1px, transparent 4px);
+            opacity: 0.28;
+            animation: crt 0.12s linear infinite;
+        }
+
+        @keyframes crt {
+            from { transform: translateY(0); }
+            to { transform: translateY(4px); }
+        }
+
+        .screen h3 {
+            font-size: clamp(0.95rem, 2.2vw, 1.35rem);
+            line-height: 1.25;
+            position: relative;
+            z-index: 1;
+        }
+
+        .screen p {
+            margin-top: 10px;
+            color: #d8f9ff;
+            font-size: clamp(0.62rem, 1.25vw, 0.86rem);
+            position: relative;
+            z-index: 1;
+        }
+
+        .control-strip {
+            position: absolute;
+            left: 14%;
+            right: 14%;
+            bottom: 10%;
+            height: 14%;
+            border-radius: 14px;
+            background: linear-gradient(160deg, #202a42, #0e1528);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 14px;
+            box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .joystick {
+            position: relative;
+            width: 62px;
+            height: 62px;
+            flex: 0 0 auto;
+        }
+
+        .joy-base {
+            position: absolute;
+            inset: 8px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 30%, #3c486b, #1a2032 70%);
+            box-shadow: inset 0 2px 7px rgba(255, 255, 255, 0.18), inset 0 -6px 8px rgba(0, 0, 0, 0.6);
+        }
+
+        .joy-stick {
+            position: absolute;
+            left: 26px;
+            top: 8px;
+            width: 10px;
+            height: 28px;
+            border-radius: 8px;
+            background: linear-gradient(180deg, #a6b2da, #57638f);
+            transform-origin: bottom center;
+            animation: stickMove 1.9s ease-in-out infinite;
+        }
+
+        .joy-ball {
+            position: absolute;
+            left: 19px;
+            top: 0;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 25% 22%, #ffa5de, #ff3f9f 75%);
+            box-shadow: 0 0 14px rgba(255, 79, 159, 0.7);
+        }
+
+        @keyframes stickMove {
+            0%, 100% { transform: rotate(0deg); }
+            40% { transform: rotate(-9deg); }
+            70% { transform: rotate(8deg); }
+        }
+
+        .arcade-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .arcade-button {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.55), 0 0 8px rgba(44, 244, 255, 0.35);
+        }
+
+        .arcade-button.b1 { background: radial-gradient(circle at 30% 25%, #fff4a6, #ffb300 70%); }
+        .arcade-button.b2 { background: radial-gradient(circle at 30% 25%, #b4ffcc, #15d16b 70%); }
+        .arcade-button.b3 { background: radial-gradient(circle at 30% 25%, #9ed8ff, #129cff 70%); }
+        .arcade-button.b4 { background: radial-gradient(circle at 30% 25%, #ffade2, #ff2a97 70%); }
+
+        .start-panel {
+            position: absolute;
+            bottom: 0.8%;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 3;
+            width: max-content;
+        }
+
+        .start-btn {
+            border: none;
+            border-radius: 999px;
+            padding: 14px 34px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: clamp(0.95rem, 2vw, 1.05rem);
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            color: #051425;
+            background: linear-gradient(90deg, var(--neon-green), #ebff8f);
+            box-shadow: 0 0 20px rgba(204, 255, 77, 0.72), 0 12px 22px rgba(0, 0, 0, 0.45);
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .start-btn:hover {
+            transform: translateY(-3px);
+        }
+
+        .start-hint {
+            margin-top: 8px;
+            font-size: 0.77rem;
+            color: #c6d8ec;
+            letter-spacing: 1px;
+        }
+
+        .warp-flash {
+            position: fixed;
+            inset: 0;
+            z-index: 22;
+            pointer-events: none;
+            opacity: 0;
+            background:
+                radial-gradient(circle at center, transparent 0 12%, rgba(0, 0, 0, 0.45) 34%, rgba(0, 0, 0, 0.95) 100%),
+                repeating-radial-gradient(circle at center, rgba(44, 244, 255, 0.14) 0 2px, transparent 2px 22px);
+        }
+
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.84);
+            backdrop-filter: blur(6px);
+            z-index: 30;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-box {
+            width: 95%;
+            height: 95%;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            background: rgba(15, 22, 38, 0.8);
+            color: #fff;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 16px;
+            background: #000;
+        }
+
+        @media (max-width: 1024px) {
+            .hero {
+                grid-template-columns: 1fr;
+            }
+
+            .games-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .features {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .progress-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .progress-lists {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .games-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .features {
+                grid-template-columns: 1fr;
+            }
+
+            .topbar {
+                flex-direction: column;
+                gap: 12px;
+                align-items: flex-start;
+            }
+
+            .topbar-actions {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            .patient-controls {
+                width: 100%;
+            }
+
+            .patient-input {
+                width: 100%;
+            }
+
+            .intro-shell {
+                height: min(88vh, 760px);
+            }
+
+            .cabinet {
+                width: min(90%, 540px);
+                height: 76%;
+            }
+
+            .control-strip {
+                left: 10%;
+                right: 10%;
+            }
+
+            .start-panel {
+                bottom: 1%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="aurora"></div>
+    <div class="starfield" id="starfield"></div>
+
+    <div class="intro-overlay" id="introOverlay">
+        <div class="intro-shell">
+            <div class="intro-title">
+                <h2>RehabPlay Arcade</h2>
+                <p>Enter the cabinet and launch your therapy mission</p>
+            </div>
+
+            <div class="cabinet" id="cabinet">
+                <div class="marquee"><strong>Health Quest</strong></div>
+                <div class="screen-shell">
+                    <div class="screen">
+                        <div>
+                            <h3>Ready Player Rehab</h3>
+                            <p>Pose Tracking | Hand Control | Real-Time Scoring</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="control-strip">
+                    <div class="joystick" aria-hidden="true">
+                        <div class="joy-base"></div>
+                        <div class="joy-stick"></div>
+                        <div class="joy-ball"></div>
+                    </div>
+                    <div class="arcade-buttons" aria-hidden="true">
+                        <span class="arcade-button b1"></span>
+                        <span class="arcade-button b2"></span>
+                        <span class="arcade-button b3"></span>
+                        <span class="arcade-button b4"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="start-panel" id="startPanel">
+                <button class="start-btn" id="startBtn" type="button">Start Adventure</button>
+                <p class="start-hint">Press Enter to Start</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="warp-flash" id="warpFlash"></div>
+
+    <main class="main" id="mainContent">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-badge">🏥</div>
+                <h1>RehabPlay</h1>
+            </div>
+            <div class="topbar-actions">
+                <div class="patient-controls">
+                    <label for="patientNameInput">Patient</label>
+                    <input class="patient-input" id="patientNameInput" type="text" maxlength="40" placeholder="Enter patient name" list="patientNameOptions">
+                    <button class="patient-save-btn" id="savePatientBtn" type="button">Switch</button>
+                    <button class="patient-search-btn" id="searchPatientBtn" type="button">Search</button>
+                    <span class="patient-tag" id="activePatientTag">Active: Patient 1</span>
+                    <datalist id="patientNameOptions"></datalist>
+                    <div class="patient-search-results" id="patientSearchResults"></div>
+                </div>
+                <button class="home-btn" id="homeBtn"><i class="fas fa-home"></i> Home</button>
+            </div>
+        </header>
+
+        <section class="hero">
+            <div>
+                <h2>Choose Your <span>Rehab Mission</span></h2>
+                <p>Train with game-based therapy built for shoulder mobility, pinch coordination, and finger dexterity. Your dashboard is tuned for immersive sessions with camera-based AI tracking.</p>
+                <div class="hero-chips">
+                    <span>AI Camera Ready</span>
+                    <span>Real-Time Feedback</span>
+                    <span>Arcade Difficulty Flow</span>
+                </div>
+            </div>
+            <aside class="score-panel">
+                <div class="metric"><strong>Tracking Status</strong><span class="value">Online</span></div>
+                <div class="metric"><strong>Games Available</strong><span class="value" id="gamesAvailableValue">00</span></div>
+                <div class="metric"><strong>Session Mode</strong><span class="value">Arcade Rehab</span></div>
+            </aside>
+        </section>
+
+        <h3 class="section-title">Available Exercises</h3>
+        <section class="progress-panel" id="progressPanel">
+            <div class="progress-head">
+                <div>
+                    <h3>Progress Tracker</h3>
+                    <p class="progress-subtitle" id="progressSubtitle">Tracking for Patient 1</p>
+                </div>
+                <div class="progress-actions">
+                    <button class="mini-btn" id="exportProgressBtn">Export Data</button>
+                    <button class="mini-btn warn" id="clearProgressBtn">Reset Data</button>
+                </div>
+            </div>
+
+            <div class="progress-grid">
+                <div class="progress-kpi">
+                    <p>Total Sessions</p>
+                    <strong id="kpiTotalSessions">0</strong>
+                </div>
+                <div class="progress-kpi">
+                    <p>Total Play Time</p>
+                    <strong id="kpiTotalMinutes">0 min</strong>
+                </div>
+                <div class="progress-kpi">
+                    <p>Best Score</p>
+                    <strong id="kpiBestScore">0</strong>
+                </div>
+                <div class="progress-kpi">
+                    <p>Last Played</p>
+                    <strong id="kpiLastPlayed">Never</strong>
+                </div>
+            </div>
+
+            <div class="progress-lists">
+                <div class="progress-list-box">
+                    <h4>Best Per Game</h4>
+                    <ul class="progress-list" id="perGameList"></ul>
+                </div>
+                <div class="progress-list-box">
+                    <h4>Recent Sessions</h4>
+                    <ul class="progress-list" id="recentSessionsList"></ul>
+                </div>
+                <div class="progress-list-box">
+                    <div class="leaderboard-head">
+                        <h4>Leaderboard</h4>
+                        <select class="leaderboard-filter" id="leaderboardGameFilter">
+                            <option value="all">All Games</option>
+                            <option value="shoulder-rehab">Shoulder Rehab</option>
+                            <option value="object-catch">Pinch and Catch</option>
+                            <option value="finger-trainer">Finger Trainer</option>
+                        </select>
+                    </div>
+                    <ul class="progress-list leaderboard-list" id="leaderboardList"></ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="games-grid" id="gamesGrid"></section>
+
+        <section class="features">
+            <div class="feature-box"><i class="fa-solid fa-wave-square"></i><p>Motion Analytics</p></div>
+            <div class="feature-box"><i class="fa-solid fa-hand"></i><p>Gesture Precision</p></div>
+            <div class="feature-box"><i class="fa-solid fa-bolt"></i><p>Fast Start Sessions</p></div>
+            <div class="feature-box"><i class="fa-solid fa-gamepad"></i><p>Arcade Motivation</p></div>
+        </section>
+    </main>
+
+    <div class="modal" id="gameModal">
+        <div class="modal-box">
+            <button class="modal-close" onclick="closeGame()"><i class="fas fa-times"></i></button>
+            <iframe id="gameFrame" src="" allow="camera; microphone" allowfullscreen></iframe>
+        </div>
+    </div>
+
+    <script>
+        const introOverlay = document.getElementById('introOverlay');
+        const cabinet = document.getElementById('cabinet');
+        const startBtn = document.getElementById('startBtn');
+        const startPanel = document.getElementById('startPanel');
+        const homeBtn = document.getElementById('homeBtn');
+        const warpFlash = document.getElementById('warpFlash');
+        const gameModal = document.getElementById('gameModal');
+        const gameFrame = document.getElementById('gameFrame');
+        const starfield = document.getElementById('starfield');
+        const gamesGrid = document.getElementById('gamesGrid');
+        const gamesAvailableValue = document.getElementById('gamesAvailableValue');
+        const patientNameInput = document.getElementById('patientNameInput');
+        const savePatientBtn = document.getElementById('savePatientBtn');
+        const searchPatientBtn = document.getElementById('searchPatientBtn');
+        const activePatientTag = document.getElementById('activePatientTag');
+        const patientNameOptions = document.getElementById('patientNameOptions');
+        const patientSearchResults = document.getElementById('patientSearchResults');
+        const progressSubtitle = document.getElementById('progressSubtitle');
+        const exportProgressBtn = document.getElementById('exportProgressBtn');
+        const clearProgressBtn = document.getElementById('clearProgressBtn');
+        const kpiTotalSessions = document.getElementById('kpiTotalSessions');
+        const kpiTotalMinutes = document.getElementById('kpiTotalMinutes');
+        const kpiBestScore = document.getElementById('kpiBestScore');
+        const kpiLastPlayed = document.getElementById('kpiLastPlayed');
+        const perGameList = document.getElementById('perGameList');
+        const recentSessionsList = document.getElementById('recentSessionsList');
+        const leaderboardList = document.getElementById('leaderboardList');
+        const leaderboardGameFilter = document.getElementById('leaderboardGameFilter');
+
+        const GAME_REGISTRY = [
+            {
+                id: 'shoulder-rehab',
+                route: '/web_platform/games/shoulder_rehab.html',
+                icon: '💪',
+                title: 'Shoulder Rehab',
+                description: 'Guided shoulder movement training using full-body pose tracking and repetition scoring.',
+                tags: ['Medium', 'Pose Tracking'],
+                thumbClass: 'thumb-1'
+            },
+            {
+                id: 'object-catch',
+                route: '/web_platform/games/object_catch.html',
+                icon: '🎯',
+                title: 'Pinch and Catch',
+                description: 'Improve fine motor control and hand-eye coordination with pinch-based interactions.',
+                tags: ['Beginner', 'Hand Tracking'],
+                thumbClass: 'thumb-2'
+            },
+            {
+                id: 'finger-trainer',
+                route: '/web_platform/games/finger_trainer.html',
+                icon: '👆',
+                title: 'Finger Trainer',
+                description: 'Progressive finger targeting challenges across levels to develop dexterity and control.',
+                tags: ['Advanced', 'Hand Tracking'],
+                thumbClass: 'thumb-3'
+            }
+        ];
+
+        const ACTIVE_PATIENT_STORAGE_KEY = 'rehabplay.active_patient.v1';
+        const PROGRESS_STORAGE_KEY_PREFIX = 'rehabplay.progress.v2.';
+        const apiBase = `${window.location.protocol}//${window.location.hostname}:5000`;
+
+        let introBusy = false;
+        let pointerMoveRaf = null;
+        let latestPointer = { x: 0, y: 0 };
+        let stars = [];
+        let shootingStarTimer = null;
+        let activeSession = null;
+        let progressState = { sessions: [] };
+        let currentPatientName = 'Patient 1';
+        let currentUserId = 'patient-1';
+        let patientDirectory = [];
+        let currentLeaderboardGame = 'all';
+
+        async function ensureCameraPermission() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('Camera API not available in this browser');
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'user' },
+                audio: false
+            });
+
+            // Release immediately; each game will open its own camera stream.
+            stream.getTracks().forEach((track) => track.stop());
+        }
+
+        function showCameraHelp(error) {
+            const message = (error && error.message) ? error.message : String(error || 'Unknown camera error');
+            const guidance = [
+                'Camera access is blocked.',
+                'Allow camera for 127.0.0.1 in browser site permissions, then reload.',
+                'Also close any other tab/app that is already using your camera.',
+                `Details: ${message}`
+            ].join('\n\n');
+            alert(guidance);
+        }
+
+        function gameTitleById(gameId) {
+            const game = GAME_REGISTRY.find((item) => item.id === gameId);
+            return game ? game.title : gameId;
+        }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function normalizePatientName(input) {
+            const normalized = String(input || '')
+                .trim()
+                .replace(/\s+/g, ' ')
+                .slice(0, 40);
+            return normalized || 'Patient 1';
+        }
+
+        function patientNameToUserId(patientName) {
+            const slug = patientName
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+            return slug ? `patient-${slug}` : 'patient-1';
+        }
+
+        function progressStorageKey() {
+            return `${PROGRESS_STORAGE_KEY_PREFIX}${currentUserId}`;
+        }
+
+        function renderPatientIdentity() {
+            const label = `Active: ${currentPatientName}`;
+            activePatientTag.textContent = label;
+            progressSubtitle.textContent = `Tracking for ${currentPatientName}`;
+            patientNameInput.value = currentPatientName;
+        }
+
+        function hidePatientSearchResults() {
+            patientSearchResults.classList.remove('show');
+            patientSearchResults.innerHTML = '';
+        }
+
+        function renderPatientOptions(patients) {
+            if (!patientNameOptions) {
+                return;
+            }
+            patientNameOptions.innerHTML = (patients || [])
+                .map((item) => `<option value="${escapeHtml(item.patient_name || '')}"></option>`)
+                .join('');
+        }
+
+        function renderPatientSearchResults(patients, queryText) {
+            const rows = Array.isArray(patients) ? patients : [];
+            if (!rows.length) {
+                patientSearchResults.innerHTML = `<div class="empty-text">No patient found for "${escapeHtml(queryText || '')}".</div>`;
+                patientSearchResults.classList.add('show');
+                return;
+            }
+
+            patientSearchResults.innerHTML = rows
+                .map((item) => {
+                    const safeName = escapeHtml(item.patient_name || 'Patient');
+                    const safeLastUsed = escapeHtml(formatPlayedAt(item.last_used));
+                    const sessions = Number(item.sessions || 0);
+                    const safeUserId = escapeHtml(item.user_id || '');
+                    return `
+                        <button type="button" class="patient-search-item" data-user-id="${safeUserId}">
+                            <span>${safeName}</span>
+                            <span class="patient-search-meta">${sessions} sessions | ${safeLastUsed}</span>
+                        </button>
+                    `;
+                })
+                .join('');
+            patientSearchResults.classList.add('show');
+        }
+
+        function findExistingPatientByName(name) {
+            const normalizedName = normalizePatientName(name).toLowerCase();
+            const expectedUserId = patientNameToUserId(normalizedName);
+
+            return patientDirectory.find((patient) => {
+                const patientName = normalizePatientName(patient.patient_name || '').toLowerCase();
+                return patientName === normalizedName || patient.user_id === expectedUserId;
+            }) || null;
+        }
+
+        function setCurrentPatient(name, options = {}) {
+            const { persist = true, reload = true } = options;
+            const normalized = normalizePatientName(name);
+            currentPatientName = normalized;
+            currentUserId = patientNameToUserId(normalized);
+
+            if (persist) {
+                localStorage.setItem(ACTIVE_PATIENT_STORAGE_KEY, normalized);
+            }
+
+            renderPatientIdentity();
+            hidePatientSearchResults();
+
+            if (reload) {
+                loadProgress();
+                loadLeaderboard();
+                loadPatientDirectory();
+            }
+        }
+
+        function formatMinutes(totalSeconds) {
+            const minutes = Math.round((Number(totalSeconds) || 0) / 60);
+            return `${minutes} min`;
+        }
+
+        function formatPlayedAt(isoTime) {
+            if (!isoTime) {
+                return 'Never';
+            }
+            const date = new Date(isoTime);
+            if (Number.isNaN(date.getTime())) {
+                return 'Never';
+            }
+            return date.toLocaleString();
+        }
+
+        function readLocalProgress() {
+            try {
+                const raw = localStorage.getItem(progressStorageKey());
+                if (!raw) {
+                    return { sessions: [] };
+                }
+                const parsed = JSON.parse(raw);
+                if (!parsed || !Array.isArray(parsed.sessions)) {
+                    return { sessions: [] };
+                }
+                return parsed;
+            } catch (error) {
+                return { sessions: [] };
+            }
+        }
+
+        function writeLocalProgress(state) {
+            localStorage.setItem(progressStorageKey(), JSON.stringify(state));
+        }
+
+        function summarizeProgress(state) {
+            const sessions = state.sessions || [];
+            const totalSessions = sessions.length;
+            const totalDurationSeconds = sessions.reduce((sum, session) => sum + (session.duration_seconds || 0), 0);
+            const bestScore = sessions.reduce((maxScore, session) => Math.max(maxScore, session.score || 0), 0);
+            const lastPlayed = sessions.length ? sessions[0].completed_at : '';
+
+            const perGameMap = new Map();
+            sessions.forEach((session) => {
+                const prev = perGameMap.get(session.game_id) || { game_id: session.game_id, sessions: 0, best_score: 0 };
+                prev.sessions += 1;
+                prev.best_score = Math.max(prev.best_score, session.score || 0);
+                perGameMap.set(session.game_id, prev);
+            });
+
+            return {
+                total_sessions: totalSessions,
+                total_duration_seconds: totalDurationSeconds,
+                best_score: bestScore,
+                last_played: lastPlayed,
+                per_game: Array.from(perGameMap.values()),
+                recent_sessions: sessions.slice(0, 10)
+            };
+        }
+
+        function renderProgress(summary) {
+            kpiTotalSessions.textContent = String(summary.total_sessions || 0);
+            kpiTotalMinutes.textContent = formatMinutes(summary.total_duration_seconds || 0);
+            kpiBestScore.textContent = String(summary.best_score || 0);
+            kpiLastPlayed.textContent = formatPlayedAt(summary.last_played);
+
+            const perGame = summary.per_game || [];
+            if (!perGame.length) {
+                perGameList.innerHTML = '<li class="empty-text">No game records yet.</li>';
+            } else {
+                perGameList.innerHTML = perGame
+                    .map((item) => `<li><span>${gameTitleById(item.game_id)}</span><span>${item.best_score}</span></li>`)
+                    .join('');
+            }
+
+            const recent = summary.recent_sessions || [];
+            if (!recent.length) {
+                recentSessionsList.innerHTML = '<li class="empty-text">Play a game to create your first session.</li>';
+            } else {
+                recentSessionsList.innerHTML = recent
+                    .map((item) => {
+                        const playedAt = formatPlayedAt(item.completed_at);
+                        return `<li><span>${gameTitleById(item.game_id)} (${item.duration_seconds || 0}s)<small class="session-time">Used: ${playedAt}</small></span><span>${item.score || 0}</span></li>`;
+                    })
+                    .join('');
+            }
+        }
+
+        async function fetchPatients(query = '', limit = 25) {
+            const url = `${apiBase}/api/patients?q=${encodeURIComponent(query)}&limit=${encodeURIComponent(limit)}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error('Patient directory unavailable');
+            }
+            return response.json();
+        }
+
+        async function loadPatientDirectory(query = '') {
+            try {
+                const payload = await fetchPatients(query, 40);
+                patientDirectory = Array.isArray(payload.patients) ? payload.patients : [];
+                renderPatientOptions(patientDirectory);
+                return patientDirectory;
+            } catch (error) {
+                patientDirectory = [];
+                renderPatientOptions([]);
+                return [];
+            }
+        }
+
+        async function fetchBackendSummary() {
+            const url = `${apiBase}/api/progress/summary?user_id=${encodeURIComponent(currentUserId)}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error('Backend summary unavailable');
+            }
+            return response.json();
+        }
+
+        async function fetchBackendLeaderboard(limit = 10, gameId = 'all') {
+            const params = new URLSearchParams({ limit: String(limit) });
+            if (gameId && gameId !== 'all') {
+                params.set('game_id', gameId);
+            }
+            const url = `${apiBase}/api/progress/leaderboard?${params.toString()}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error('Leaderboard unavailable');
+            }
+            return response.json();
+        }
+
+        async function deleteCurrentPatientDataBackend() {
+            const url = `${apiBase}/api/progress/patient_data?user_id=${encodeURIComponent(currentUserId)}`;
+            const response = await fetch(url, { method: 'DELETE' });
+            if (!response.ok) {
+                throw new Error('Failed to delete backend patient data');
+            }
+        }
+
+        function displayNameFromUserId(userId) {
+            const slug = String(userId || '').replace(/^patient-/, '');
+            if (!slug) {
+                return 'Patient';
+            }
+            return slug
+                .split('-')
+                .filter(Boolean)
+                .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+                .join(' ');
+        }
+
+        function renderLeaderboard(payload) {
+            const rows = (payload && Array.isArray(payload.leaderboard)) ? payload.leaderboard : [];
+            if (!rows.length) {
+                leaderboardList.innerHTML = '<li class="empty-text">No scores yet. Be the first to play.</li>';
+                return;
+            }
+
+            leaderboardList.innerHTML = rows.map((row, index) => {
+                const rank = index + 1;
+                const rankClass = rank <= 3 ? `rank-${rank}` : '';
+                const userName = row.patient_name || displayNameFromUserId(row.user_id);
+                const me = row.user_id === currentUserId ? ' (You)' : '';
+                return `
+                    <li>
+                        <span class="leader-left">
+                            <span class="rank-badge ${rankClass}">${rank}</span>
+                            <span class="leader-name">${escapeHtml(userName)}${me}</span>
+                        </span>
+                        <span class="leader-points">${Number(row.total_points || 0)} pts</span>
+                    </li>
+                `;
+            }).join('');
+        }
+
+        async function loadLeaderboard() {
+            try {
+                const payload = await fetchBackendLeaderboard(10, currentLeaderboardGame);
+                renderLeaderboard(payload);
+            } catch (error) {
+                leaderboardList.innerHTML = '<li class="empty-text">Leaderboard offline right now.</li>';
+            }
+        }
+
+        async function loadProgress() {
+            progressState = readLocalProgress();
+            renderProgress(summarizeProgress(progressState));
+
+            try {
+                const backendSummary = await fetchBackendSummary();
+                renderProgress(backendSummary);
+            } catch (error) {
+                // Local summary already rendered as fallback.
+            }
+        }
+
+        function appendSessionLocal(sessionPayload) {
+            const current = readLocalProgress();
+            current.sessions.unshift(sessionPayload);
+            current.sessions = current.sessions.slice(0, 200);
+            writeLocalProgress(current);
+            progressState = current;
+            renderProgress(summarizeProgress(current));
+        }
+
+        async function saveSessionBackend(sessionPayload) {
+            try {
+                await fetch(`${apiBase}/api/progress/session`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sessionPayload)
+                });
+            } catch (error) {
+                // Keep local data even if backend is offline.
+            }
+        }
+
+        function renderGames() {
+            if (!gamesGrid) {
+                return;
+            }
+
+            const cardsHtml = GAME_REGISTRY.map((game) => {
+                const tagsHtml = game.tags.map((tag) => `<span class="tag">${tag}</span>`).join('');
+                return `
+                    <article class="game-card">
+                        <div class="game-thumb ${game.thumbClass}">${game.icon}</div>
+                        <div class="game-content">
+                            <h4>${game.title}</h4>
+                            <p>${game.description}</p>
+                            <div class="tag-row">${tagsHtml}</div>
+                            <button class="play-btn" onclick="launchGame('${game.id}')"><i class="fas fa-play"></i> Start Exercise</button>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+
+            gamesGrid.innerHTML = cardsHtml;
+
+            if (gamesAvailableValue) {
+                gamesAvailableValue.textContent = String(GAME_REGISTRY.length).padStart(2, '0');
+            }
+        }
+
+        function createStarfield() {
+            if (!starfield) {
+                return;
+            }
+
+            const starCount = 260;
+            const fragment = document.createDocumentFragment();
+
+            for (let index = 0; index < starCount; index += 1) {
+                const star = document.createElement('span');
+                const x = Math.random() * 100;
+                const y = Math.random() * 100;
+                const size = Math.random() * 2.6 + 1;
+                const alpha = Math.random() * 0.5 + 0.45;
+                const drift = (Math.random() * 6 + 5).toFixed(2);
+                const delay = (Math.random() * 5).toFixed(2);
+
+                star.className = 'star';
+                if (size > 2.7) {
+                    star.classList.add('large');
+                }
+
+                star.style.left = `${x}%`;
+                star.style.top = `${y}%`;
+                star.style.setProperty('--size', `${size.toFixed(2)}px`);
+                star.style.setProperty('--alpha', alpha.toFixed(2));
+                star.style.setProperty('--drift', `${drift}s`);
+                star.style.setProperty('--delay', `${delay}s`);
+                star.dataset.x = x.toFixed(3);
+                star.dataset.y = y.toFixed(3);
+
+                fragment.appendChild(star);
+            }
+
+            starfield.appendChild(fragment);
+            stars = Array.from(starfield.querySelectorAll('.star'));
+        }
+
+        function twinkleNearPointer() {
+            pointerMoveRaf = null;
+            if (!stars.length) {
+                return;
+            }
+
+            const vw = window.innerWidth || 1;
+            const vh = window.innerHeight || 1;
+            const px = (latestPointer.x / vw) * 100;
+            const py = (latestPointer.y / vh) * 100;
+            let twinkles = 0;
+
+            for (let index = 0; index < stars.length; index += 1) {
+                if (twinkles >= 8) {
+                    break;
+                }
+
+                const star = stars[index];
+                const dx = px - Number(star.dataset.x);
+                const dy = py - Number(star.dataset.y);
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 10 && Math.random() < 0.18) {
+                    star.classList.remove('twinkle');
+                    void star.offsetWidth;
+                    star.classList.add('twinkle');
+                    twinkles += 1;
+                }
+            }
+        }
+
+        function handlePointerMove(event) {
+            latestPointer.x = event.clientX;
+            latestPointer.y = event.clientY;
+            if (!pointerMoveRaf) {
+                pointerMoveRaf = window.requestAnimationFrame(twinkleNearPointer);
+            }
+        }
+
+        function spawnShootingStar() {
+            if (!starfield) {
+                return;
+            }
+
+            const meteor = document.createElement('span');
+            meteor.className = 'shooting-star';
+
+            const startX = Math.random() * 75 + 10;
+            const startY = Math.random() * 35 + 5;
+            const dx = Math.random() * 240 + 320;
+            const dy = Math.random() * 100 + 120;
+            const angle = Math.random() * -18 - 24;
+            const dur = (Math.random() * 0.55 + 0.95).toFixed(2);
+
+            meteor.style.left = `${startX}%`;
+            meteor.style.top = `${startY}%`;
+            meteor.style.setProperty('--dx', `${dx}px`);
+            meteor.style.setProperty('--dy', `${dy}px`);
+            meteor.style.setProperty('--angle', `${angle}deg`);
+            meteor.style.setProperty('--dur', `${dur}s`);
+
+            starfield.appendChild(meteor);
+            requestAnimationFrame(() => {
+                meteor.classList.add('animate');
+            });
+
+            meteor.addEventListener('animationend', () => {
+                meteor.remove();
+            }, { once: true });
+        }
+
+        function scheduleShootingStars() {
+            if (shootingStarTimer) {
+                window.clearTimeout(shootingStarTimer);
+            }
+
+            const minDelay = 9000;
+            const maxDelay = 19000;
+            const delay = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+
+            shootingStarTimer = window.setTimeout(() => {
+                if (!document.hidden && Math.random() < 0.86) {
+                    spawnShootingStar();
+                }
+                scheduleShootingStars();
+            }, delay);
+        }
+
+        function initCardTilt() {
+            if (window.VanillaTilt) {
+                VanillaTilt.init(document.querySelectorAll('.game-card'), {
+                    max: 6,
+                    speed: 380,
+                    glare: true,
+                    'max-glare': 0.16,
+                    perspective: 900
+                });
+            }
+        }
+
+        function revealDashboardAnimated() {
+            document.body.classList.add('dashboard-ready');
+
+            const cards = document.querySelectorAll('.game-card');
+            cards.forEach((card) => {
+                card.style.display = 'block';
+                card.style.visibility = 'visible';
+                card.style.opacity = '1';
+            });
+
+            if (!window.gsap) {
+                return;
+            }
+
+            gsap.killTweensOf('.topbar, .hero, .game-card, .feature-box');
+            gsap.set('.game-card', { opacity: 1, visibility: 'visible', display: 'block', y: 0 });
+
+            gsap.fromTo('.topbar', { y: -18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45, ease: 'power2.out' });
+            gsap.fromTo('.hero', { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.55, ease: 'power2.out', delay: 0.05 });
+            gsap.fromTo('.game-card', { y: 26, opacity: 0 }, { y: 0, opacity: 1, duration: 0.55, stagger: 0.08, ease: 'power2.out', delay: 0.1 });
+            gsap.fromTo('.feature-box', { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, stagger: 0.06, ease: 'power2.out', delay: 0.25 });
+        }
+
+        function resetIntroVisuals() {
+            if (window.gsap) {
+                gsap.set([introOverlay, cabinet, startPanel, warpFlash], { clearProps: 'all' });
+            } else {
+                introOverlay.style.opacity = '1';
+                cabinet.style.opacity = '1';
+                cabinet.style.transform = '';
+                startPanel.style.opacity = '1';
+                warpFlash.style.opacity = '0';
+            }
+            startBtn.disabled = false;
+            introBusy = false;
+        }
+
+        function showIntro(animated) {
+            resetIntroVisuals();
+            introOverlay.style.display = 'grid';
+            document.body.classList.remove('dashboard-ready');
+            document.body.classList.remove('intro-transition');
+            document.body.classList.add('intro-active');
+
+            if (animated && window.gsap) {
+                gsap.fromTo(introOverlay, { opacity: 0 }, { opacity: 1, duration: 0.35, ease: 'power2.out' });
+                gsap.fromTo(cabinet, { y: 20, scale: 0.97 }, { y: 0, scale: 1, duration: 0.45, ease: 'power2.out' });
+            }
+        }
+
+        function startAdventure() {
+            if (introBusy || !document.body.classList.contains('intro-active')) {
+                return;
+            }
+
+            introBusy = true;
+            startBtn.disabled = true;
+            document.body.classList.add('intro-transition');
+
+            if (!window.gsap) {
+                introOverlay.style.display = 'none';
+                document.body.classList.remove('intro-active', 'intro-transition');
+                revealDashboardAnimated();
+                return;
+            }
+
+            const tl = gsap.timeline({
+                onComplete: () => {
+                    introOverlay.style.display = 'none';
+                    document.body.classList.remove('intro-active', 'intro-transition');
+                    revealDashboardAnimated();
+                    introBusy = false;
+                }
+            });
+
+            tl.to(startPanel, { opacity: 0, y: 18, duration: 0.14, ease: 'power2.in' })
+              .to(cabinet, { scale: 1.12, duration: 0.18, ease: 'power2.inOut' }, '<')
+              .to(warpFlash, { opacity: 0.9, duration: 0.2, ease: 'power2.out' }, '<+0.04')
+              .to(cabinet, { scale: 3.4, y: -18, opacity: 0, duration: 0.5, ease: 'power3.in' })
+              .to(introOverlay, { opacity: 0, duration: 0.2, ease: 'power2.in' }, '<+0.2')
+              .to(warpFlash, { opacity: 0, duration: 0.2, ease: 'power2.out' }, '<');
+        }
+
+        async function launchGame(gameId) {
+            const selectedGame = GAME_REGISTRY.find((game) => game.id === gameId);
+
+            if (selectedGame) {
+                try {
+                    await ensureCameraPermission();
+                } catch (error) {
+                    showCameraHelp(error);
+                    return;
+                }
+
+                activeSession = {
+                    user_id: currentUserId,
+                    game_id: selectedGame.id,
+                    started_at: new Date().toISOString(),
+                    score: 0,
+                    reps: 0,
+                    accuracy: 0
+                };
+                gameFrame.src = selectedGame.route;
+                gameModal.classList.add('active');
+            }
+        }
+
+        function closeAndPersistSession() {
+            if (!activeSession) {
+                return;
+            }
+
+            const finishedAt = new Date();
+            const startedAt = new Date(activeSession.started_at);
+            const durationSeconds = Math.max(Math.round((finishedAt - startedAt) / 1000), 1);
+
+            const payload = {
+                user_id: currentUserId,
+                game_id: activeSession.game_id,
+                duration_seconds: durationSeconds,
+                score: activeSession.score || Math.min(durationSeconds * 2, 500),
+                reps: activeSession.reps || 0,
+                accuracy: activeSession.accuracy || 0,
+                completed_at: finishedAt.toISOString(),
+                patient_name: currentPatientName
+            };
+
+            appendSessionLocal(payload);
+            saveSessionBackend(payload);
+            loadLeaderboard();
+            loadPatientDirectory(currentPatientName);
+            activeSession = null;
+        }
+
+        async function handleSwitchPatient() {
+            const requestedName = normalizePatientName(patientNameInput.value);
+            const requestedUserId = patientNameToUserId(requestedName);
+
+            let matches = patientDirectory;
+            if (!matches.length) {
+                matches = await loadPatientDirectory(requestedName);
+            }
+
+            const existing = matches.find((patient) => patient.user_id === requestedUserId)
+                || matches.find((patient) => normalizePatientName(patient.patient_name || '') === requestedName)
+                || null;
+
+            if (existing) {
+                setCurrentPatient(existing.patient_name || requestedName, { persist: true, reload: true });
+                return;
+            }
+
+            const createNew = window.confirm(`No existing patient found for "${requestedName}". Create and switch to a new profile?`);
+            if (createNew) {
+                setCurrentPatient(requestedName, { persist: true, reload: true });
+            }
+        }
+
+        async function handleSearchPatients() {
+            const query = normalizePatientName(patientNameInput.value);
+            const matches = await loadPatientDirectory(query);
+            renderPatientSearchResults(matches, query);
+        }
+
+        function closeGame() {
+            closeAndPersistSession();
+            gameModal.classList.remove('active');
+            gameFrame.src = '';
+        }
+
+        startBtn.addEventListener('click', startAdventure);
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.repeat) {
+                startAdventure();
+            }
+            if (event.key === 'Escape') {
+                closeGame();
+            }
+        });
+
+        window.addEventListener('message', (event) => {
+            const data = event.data || {};
+            if (!activeSession || typeof data !== 'object') {
+                return;
+            }
+
+            if (data.type !== 'rehab-progress') {
+                return;
+            }
+
+            if (typeof data.score === 'number') {
+                activeSession.score = Math.max(0, Math.round(data.score));
+            }
+            if (typeof data.reps === 'number') {
+                activeSession.reps = Math.max(0, Math.round(data.reps));
+            }
+            if (typeof data.accuracy === 'number') {
+                activeSession.accuracy = Math.min(100, Math.max(0, data.accuracy));
+            }
+        });
+
+        homeBtn.addEventListener('click', () => {
+            showIntro(true);
+        });
+
+        exportProgressBtn.addEventListener('click', () => {
+            const snapshot = readLocalProgress();
+            const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const safeName = currentPatientName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'patient';
+            link.download = `rehabplay-progress-${safeName}-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        });
+
+        clearProgressBtn.addEventListener('click', async () => {
+            const shouldClear = window.confirm(`Reset all data for ${currentPatientName}? This removes them from leaderboard too.`);
+            if (!shouldClear) {
+                return;
+            }
+
+            writeLocalProgress({ sessions: [] });
+            progressState = { sessions: [] };
+            renderProgress(summarizeProgress(progressState));
+
+            try {
+                await deleteCurrentPatientDataBackend();
+            } catch (error) {
+                alert('Local data reset done, but backend delete failed. Please check server and try again.');
+            }
+
+            await loadProgress();
+            await loadLeaderboard();
+            await loadPatientDirectory('');
+        });
+
+        savePatientBtn.addEventListener('click', handleSwitchPatient);
+
+        searchPatientBtn.addEventListener('click', handleSearchPatients);
+
+        leaderboardGameFilter.addEventListener('change', () => {
+            currentLeaderboardGame = leaderboardGameFilter.value || 'all';
+            loadLeaderboard();
+        });
+
+        patientNameInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                handleSwitchPatient();
+            }
+        });
+
+        patientNameInput.addEventListener('focus', async () => {
+            if (!patientDirectory.length) {
+                const matches = await loadPatientDirectory('');
+                renderPatientSearchResults(matches.slice(0, 8), '');
+            }
+        });
+
+        patientSearchResults.addEventListener('click', (event) => {
+            const target = event.target.closest('.patient-search-item');
+            if (!target) {
+                return;
+            }
+            const userId = target.dataset.userId || '';
+            const selected = patientDirectory.find((patient) => patient.user_id === userId);
+            const name = selected ? selected.patient_name : patientNameInput.value;
+            setCurrentPatient(name, { persist: true, reload: true });
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!event.target.closest('.patient-controls')) {
+                hidePatientSearchResults();
+            }
+        });
+
+        gameModal.addEventListener('click', (event) => {
+            if (event.target === gameModal) {
+                closeGame();
+            }
+        });
+
+        renderGames();
+        initCardTilt();
+        createStarfield();
+        scheduleShootingStars();
+        setCurrentPatient(localStorage.getItem(ACTIVE_PATIENT_STORAGE_KEY) || 'Patient 1', { persist: false, reload: true });
+        loadPatientDirectory('');
+        window.addEventListener('mousemove', handlePointerMove, { passive: true });
+        showIntro(true);
+    </script>
+</body>
+</html>

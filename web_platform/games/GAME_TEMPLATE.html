@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Game Template</title>
+    
+    <!-- Include MediaPipe libraries based on your needs -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    
+    <!-- Choose one: -->
+    <!-- For hand tracking: -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <!-- For pose tracking: -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script> -->
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg,cyan 0%, yellow 100%);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #output-canvas {
+            transform: scaleX(-1); /* Mirror camera */
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            max-width: 95%;
+            max-height: 95%;
+        }
+
+        .video-input {
+            display: none;
+        }
+
+        /* Game UI Panel */
+        .game-ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(15, 23, 42, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            color: white;
+            min-width: 280px;
+            border: 2px solid rgba(102, 126, 234, 0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .game-ui h2 {
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            color: red;
+        }
+
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            margin: 12px 0;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+        }
+
+        .stat-label {
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: blue;
+        }
+
+        /* Loading Screen */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Feedback Message */
+        .feedback {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 3rem;
+            font-weight: bold;
+            color: #00f2fe;
+            text-shadow: 0 0 20px rgba(0, 242, 254, 0.8);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .feedback.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Loading camera and AI models...</p>
+        </div>
+
+        <video class="video-input" id="video" autoplay playsinline></video>
+        <canvas id="output-canvas"></canvas>
+        
+        <!-- Game UI -->
+        <div class="game-ui">
+            <h2>🎮 Your Game Name</h2>
+            <div class="stat">
+                <span class="stat-label">Score:</span>
+                <span class="stat-value" id="score">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Level:</span>
+                <span class="stat-value" id="level">1</span>
+            </div>
+            <!-- Add more stats as needed -->
+        </div>
+
+        <div class="feedback" id="feedback"></div>
+    </div>
+
+    <script>
+        // ===========================
+        // SETUP
+        // ===========================
+        const videoElement = document.getElementById('video');
+        const canvasElement = document.getElementById('output-canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const loading = document.getElementById('loading');
+
+        // Game State
+        let gameState = {
+            score: 0,
+            level: 1,
+            // Add your game variables here
+        };
+
+        // ===========================
+        // HELPER FUNCTIONS
+        // ===========================
+        
+        // Update UI displays
+        function updateUI() {
+            document.getElementById('score').textContent = gameState.score;
+            document.getElementById('level').textContent = gameState.level;
+        }
+
+        // Show feedback message
+        function showFeedback(text) {
+            const feedback = document.getElementById('feedback');
+            feedback.textContent = text;
+            feedback.classList.add('show');
+            setTimeout(() => feedback.classList.remove('show'), 1000);
+        }
+
+        // Calculate angle between three points (for pose tracking)
+        function calculateAngle(a, b, c) {
+            const radians = Math.atan2(c.y - b.y, c.x - b.x) - 
+                           Math.atan2(a.y - b.y, a.x - b.x);
+            let angle = Math.abs(radians * 180.0 / Math.PI);
+            if (angle > 180.0) angle = 360 - angle;
+            return angle;
+        }
+
+        // Calculate distance between two points
+        function distance(p1, p2) {
+            return Math.sqrt(
+                Math.pow(p1.x - p2.x, 2) + 
+                Math.pow(p1.y - p2.y, 2)
+            );
+        }
+
+        // ===========================
+        // GAME LOGIC
+        // ===========================
+        
+        // Main processing function called for each frame
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            // Draw camera feed
+            canvasCtx.drawImage(results.image, 0, 0, 
+                              canvasElement.width, canvasElement.height);
+
+            // FOR HAND TRACKING:
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    // Draw hand skeleton
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS,
+                                 {color: 'rgba(0, 255, 180, 0.8)', lineWidth: 4});
+                    drawLandmarks(canvasCtx, landmarks,
+                                {color: 'rgba(255, 220, 0, 0.8)', lineWidth: 2, radius: 6});
+
+                    // YOUR GAME LOGIC HERE
+                    // Access landmarks: landmarks[0-20]
+                    // Example: const indexTip = landmarks[8];
+                }
+            }
+
+            // FOR POSE TRACKING:
+            // if (results.poseLandmarks) {
+            //     drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS,
+            //                  {color: 'rgba(0, 255, 180, 0.8)', lineWidth: 4});
+            //     drawLandmarks(canvasCtx, results.poseLandmarks,
+            //                 {color: 'rgba(255, 220, 0, 0.8)', lineWidth: 2, radius: 6});
+            //
+            //     // YOUR GAME LOGIC HERE
+            //     // const shoulder = results.poseLandmarks[12];
+            // }
+
+            canvasCtx.restore();
+            updateUI();
+        }
+
+        // ===========================
+        // MEDIAPIPE INITIALIZATION
+        // ===========================
+        
+        // FOR HAND TRACKING:
+        const hands = new Hands({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }
+        });
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
+        });
+
+        hands.onResults(onResults);
+
+        // FOR POSE TRACKING:
+        // const pose = new Pose({
+        //     locateFile: (file) => {
+        //         return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+        //     }
+        // });
+        //
+        // pose.setOptions({
+        //     modelComplexity: 1,
+        //     smoothLandmarks: true,
+        //     minDetectionConfidence: 0.5,
+        //     minTrackingConfidence: 0.5
+        // });
+        //
+        // pose.onResults(onResults);
+
+        // ===========================
+        // CAMERA SETUP
+        // ===========================
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement}); // Or: await pose.send({image: videoElement});
+            },
+            width: 1280,
+            height: 720
+        });
+
+        // Start everything
+        camera.start().then(() => {
+            loading.style.display = 'none';
+            canvasElement.width = videoElement.videoWidth || 1280;
+            canvasElement.height = videoElement.videoHeight || 720;
+        });
+
+        // ===========================
+        // KEYBOARD CONTROLS (Optional)
+        // ===========================
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'r':
+                case 'R':
+                    // Reset game
+                    gameState.score = 0;
+                    gameState.level = 1;
+                    updateUI();
+                    showFeedback('Reset!');
+                    break;
+                // Add more controls
+            }
+        });
+    </script>
+</body>
+</html>

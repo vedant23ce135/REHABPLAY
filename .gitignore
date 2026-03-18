@@ -1,0 +1,32 @@
+# Python cache/build
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+.venv-1/
+venv/
+env/
+
+# Local editor/OS files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Runtime/local data
+progress_data.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+
+# Secrets/config
+.env
+.env.*

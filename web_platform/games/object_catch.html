@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinch & Catch Challenge</title>
+    <script>
+        // Block mobile devices
+        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            document.body.innerHTML = '<div style="padding: 40px; text-align: center;"><h1>❌ Desktop Only</h1><p>Laptop/Desktop required</p></div>';
+            throw new Error('Mobile blocked');
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            overflow: hidden;
+            height: 100vh;
+        }
+        .game-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+        }
+        #video-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1);
+            z-index: 0;
+        }
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        .video-input {
+            display: none;
+        }
+        .hud {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(15, 23, 42, 0.95);
+            padding: 20px;
+            border-radius: 15px;
+            color: white;
+            min-width: 200px;
+            border: 2px solid rgba(240, 147, 251, 0.5);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        .hud-item {
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .hud-label {
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+        .hud-value {
+            font-weight: bold;
+            font-size: 1.3rem;
+            color: #f093fb;
+        }
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.95);
+            padding: 20px 40px;
+            border-radius: 15px;
+            color: white;
+            text-align: center;
+            border: 2px solid rgba(240, 147, 251, 0.5);
+            z-index: 10;
+        }
+        .loading {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Loading camera and AI models...</p>
+        </div>
+        <video class="video-input" id="video" autoplay playsinline></video>
+        <canvas id="video-canvas"></canvas>
+        <canvas id="canvas"></canvas>
+        
+        <div class="hud">
+            <h3 style="margin-bottom: 15px; color: #f093fb;">🎯 Catch Game</h3>
+            <div class="hud-item">
+                <span class="hud-label">Level:</span>
+                <span class="hud-value" id="level">1</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">Score:</span>
+                <span class="hud-value" id="score">0</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">Caught:</span>
+                <span class="hud-value" id="caught">0/5</span>
+            </div>
+        </div>
+
+        <div class="instructions">
+            <strong>👌 Make a pinch gesture</strong> (thumb + index finger) to catch falling objects!
+        </div>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const videoCanvas = document.getElementById('video-canvas');
+        const videoCtx = videoCanvas.getContext('2d');
+        const loading = document.getElementById('loading');
+        let cameraInstance = null;
+
+        // Set canvas size
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        videoCanvas.width = window.innerWidth;
+        videoCanvas.height = window.innerHeight;
+
+        // Game state
+        let gameState = {
+            level: 1,
+            score: 0,
+            caughtInLevel: 0,
+            objectsPerLevel: 5,
+            objects: [],
+            cursor: { x: 0, y: 0, pinchDistance: 100 }
+        };
+
+        // Object class
+        class FallingObject {
+            constructor() {
+                this.x = Math.random() * (canvas.width - 100) + 50;
+                this.y = 0;
+                this.radius = Math.max(15, 30 - gameState.level);
+                this.speed = 2 + gameState.level * 0.5;
+                this.dx = Math.random() * 4 - 2;
+                this.color = `hsl(${Math.random() * 360}, 70%, 60%)`;
+            }
+
+            update() {
+                this.y += this.speed;
+                this.x += this.dx;
+                
+                // Bounce off walls
+                if (this.x < this.radius || this.x > canvas.width - this.radius) {
+                    this.dx *= -1;
+                }
+
+                // Reset if off screen
+                if (this.y > canvas.height + 50) {
+                    this.reset();
+                }
+            }
+
+            reset() {
+                this.x = Math.random() * (canvas.width - 100) + 50;
+                this.y = 0;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+
+            checkCollision(cx, cy, cr) {
+                const distance = Math.sqrt(
+                    Math.pow(this.x - cx, 2) + Math.pow(this.y - cy, 2)
+                );
+                return distance < this.radius + cr;
+            }
+        }
+
+        // Initialize objects
+        function setupLevel() {
+            const objectCount = Math.min(1 + Math.floor(gameState.level / 3), 3);
+            gameState.objects = [];
+            for (let i = 0; i < objectCount; i++) {
+                gameState.objects.push(new FallingObject());
+            }
+        }
+
+        // Calculate distance between two points
+        function distance(p1, p2) {
+            return Math.sqrt(
+                Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)
+            );
+        }
+
+        // Update HUD
+        function updateHUD() {
+            document.getElementById('level').textContent = gameState.level;
+            document.getElementById('score').textContent = gameState.score;
+            document.getElementById('caught').textContent = 
+                `${gameState.caughtInLevel}/${gameState.objectsPerLevel}`;
+        }
+
+        // Game loop
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update and draw objects
+            gameState.objects.forEach(obj => {
+                obj.update();
+                obj.draw();
+
+                // Check collision with pinch cursor
+                if (gameState.cursor.pinchDistance < 50) {
+                    if (obj.checkCollision(
+                        gameState.cursor.x,
+                        gameState.cursor.y,
+                        20
+                    )) {
+                        obj.reset();
+                        gameState.score += 10;
+                        gameState.caughtInLevel += 1;
+
+                        // Level up
+                        if (gameState.caughtInLevel >= gameState.objectsPerLevel) {
+                            gameState.level += 1;
+                            gameState.caughtInLevel = 0;
+                            setupLevel();
+                        }
+
+                        updateHUD();
+                    }
+                }
+            });
+
+            // Draw cursor
+            const cursorRadius = gameState.cursor.pinchDistance < 50 ? 20 : 15;
+            const cursorColor = gameState.cursor.pinchDistance < 50 ? '#00ff00' : '#ffff00';
+            
+            ctx.beginPath();
+            ctx.arc(gameState.cursor.x, gameState.cursor.y, cursorRadius, 0, Math.PI * 2);
+            ctx.fillStyle = cursorColor;
+            ctx.globalAlpha = 0.7;
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Flag to track if we've received first frame
+        let firstFrameReceived = false;
+
+        // Process hand results
+        function onResults(results) {
+            if (!firstFrameReceived) {
+                firstFrameReceived = true;
+                loading.style.display = 'none';
+                setupLevel();
+                // Start game loop on first frame
+                if (!window.gameLoopStarted) {
+                    window.gameLoopStarted = true;
+                    gameLoop();
+                    console.log('✅ First frame received, game started');
+                }
+            }
+            
+            // Draw video feed on video canvas
+            videoCtx.save();
+            videoCtx.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
+            videoCtx.drawImage(results.image, 0, 0, videoCanvas.width, videoCanvas.height);
+            videoCtx.restore();
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // Get index finger tip and thumb tip
+                const indexTip = landmarks[8];
+                const thumbTip = landmarks[4];
+
+                // Convert to canvas coordinates
+                const indexX = canvas.width * (1 - indexTip.x);
+                const indexY = canvas.height * indexTip.y;
+                const thumbX = canvas.width * (1 - thumbTip.x);
+                const thumbY = canvas.height * thumbTip.y;
+
+                // Update cursor position (average of thumb and index)
+                gameState.cursor.x = (indexX + thumbX) / 2;
+                gameState.cursor.y = (indexY + thumbY) / 2;
+
+                // Calculate pinch distance
+                gameState.cursor.pinchDistance = Math.sqrt(
+                    Math.pow(indexX - thumbX, 2) + Math.pow(indexY - thumbY, 2)
+                );
+            }
+        }
+
+        // Initialize MediaPipe Hands
+        const hands = new Hands({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
+        });
+
+        hands.onResults(onResults);
+        console.log('🤖 MediaPipe Hands ready');  // DEBUG
+
+        // Initialize camera
+        function initializeCamera() {
+            console.log('🎥 === CAMERA INITIALIZATION START ===');
+            console.log('📺 Video element:', videoElement);
+            console.log('🖼️ Canvas elements:', videoCanvas, canvas);
+            
+            const cameraConfig = {
+                onFrame: async () => {
+                    await hands.send({image: videoElement});
+                },
+                width: 1280,
+                height: 720
+            };
+            
+            console.log('📷 Creating Camera instance...');  // DEBUG
+            cameraInstance = new Camera(videoElement, cameraConfig);
+            console.log('✅ Camera instance created:', cameraInstance);  // DEBUG
+
+            // Start everything with error handling and timeout
+            console.log('⏱️ Setting 3-second timeout...');  // DEBUG
+            let loadingTimeout = setTimeout(() => {
+                loading.style.display = 'none';
+                setupLevel();
+                gameLoop();
+                console.log('✅ Game started (timeout)');
+            }, 3000);
+
+            console.log('🚀 Calling camera.start()...');  // DEBUG
+            cameraInstance.start()
+                .then(() => {
+                    console.log('✅ CAMERA START SUCCESS');  // DEBUG
+                    clearTimeout(loadingTimeout);
+                    loading.style.display = 'none';
+                    setupLevel();
+                    gameLoop();
+                    console.log('✅ Camera and game started successfully');
+                })
+                .catch((error) => {
+                    console.error('❌ CAMERA START FAILED:', error);  // DEBUG
+                    clearTimeout(loadingTimeout);
+                    console.error('❌ Camera error details:', error);
+                    loading.style.display = 'none';
+                    setTimeout(() => { alert('Camera error: ' + error.message); }, 500);
+                });
+        }
+        
+        // Initialize on page load
+        console.log('📄 Page loaded, starting initialization...');  // DEBUG
+        initializeCamera();
+    </script>
+</body>
+</html>

@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finger Coordination Trainer</title>
+    <script>
+        // Block mobile devices
+        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+            document.body.innerHTML = '<div style="padding: 40px; text-align: center;"><h1>❌ Desktop Only</h1><p>Laptop/Desktop required</p></div>';
+            throw new Error('Mobile blocked');
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            overflow: hidden;
+            height: 100vh;
+        }
+        .container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #output-canvas {
+            transform: scaleX(-1);
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            max-width: 95%;
+            max-height: 95%;
+        }
+        .video-input {
+            display: none;
+        }
+        .ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(15, 23, 42, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            color: white;
+            min-width: 300px;
+            border: 2px solid rgba(79, 172, 254, 0.5);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .ui-overlay h2 {
+            margin-bottom: 20px;
+            color: #4facfe;
+            font-size: 1.5rem;
+        }
+        .level-badge {
+            display: inline-block;
+            padding: 8px 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 12px 0;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+        }
+        .stat-label {
+            color: #94a3b8;
+        }
+        .stat-value {
+            font-weight: bold;
+            color: #4facfe;
+            font-size: 1.2rem;
+        }
+        .target-display {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(79, 172, 254, 0.2);
+            border-radius: 10px;
+            border: 2px solid #4facfe;
+            text-align: center;
+        }
+        .target-display h3 {
+            color: #4facfe;
+            margin-bottom: 10px;
+        }
+        .finger-list {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .finger-badge {
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+        .finger-badge.active {
+            background: #00f2fe;
+            color: #0f172a;
+            font-weight: bold;
+            animation: pulse 0.5s;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4facfe, #00f2fe);
+            transition: width 0.3s;
+        }
+        .feedback-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 4rem;
+            font-weight: bold;
+            color: #00f2fe;
+            text-shadow: 0 0 30px rgba(0, 242, 254, 0.8);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .feedback-message.show {
+            opacity: 1;
+            animation: bounce 0.5s;
+        }
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+        }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.2); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Loading camera and AI models...</p>
+        </div>
+        <video class="video-input" id="video" autoplay playsinline></video>
+        <canvas id="output-canvas"></canvas>
+        
+        <div class="ui-overlay">
+            <h2>👆 Finger Trainer</h2>
+            <div class="level-badge" id="levelBadge">Level 1 - NOVICE</div>
+            
+            <div class="stat-row">
+                <span class="stat-label">Score:</span>
+                <span class="stat-value" id="score">0</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Gestures:</span>
+                <span class="stat-value" id="gestures">0</span>
+            </div>
+            
+            <div class="target-display">
+                <h3>Target Fingers:</h3>
+                <div class="finger-list" id="targetFingers"></div>
+            </div>
+            
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="feedback-message" id="feedback"></div>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('video');
+        const canvasElement = document.getElementById('output-canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const loading = document.getElementById('loading');
+        let cameraInstance = null;
+
+        // Level configuration
+        const levels = {
+            1: { type: 'single', goal: 5, label: 'NOVICE', color: '#4facfe' },
+            2: { type: 'combo', goal: 6, label: 'SKILLED', color: '#667eea' },
+            3: { type: 'two_hand', goal: 8, label: 'EXPERT', color: '#f093fb' },
+            4: { type: 'advanced', goal: 10, label: 'MASTER', color: '#f5576c' }
+        };
+
+        const fingerNames = ['INDEX', 'MIDDLE', 'RING', 'PINKY', 'THUMB'];
+        const fingerTips = [8, 12, 16, 20, 4];
+        const fingerBases = [5, 9, 13, 17, 2];
+
+        // Game state
+        let gameState = {
+            level: 1,
+            score: 0,
+            gestures: 0,
+            targetFingers: [],
+            currentFingers: [],
+            lastMatch: false
+        };
+
+        // Generate target fingers based on level
+        function generateTarget() {
+            const level = levels[gameState.level];
+            const targets = [];
+            
+            if (level.type === 'single') {
+                const idx = Math.floor(Math.random() * 5);
+                targets.push(fingerNames[idx]);
+            } else if (level.type === 'combo') {
+                const count = Math.random() < 0.5 ? 2 : 1;
+                while (targets.length < count) {
+                    const idx = Math.floor(Math.random() * 5);
+                    const finger = fingerNames[idx];
+                    if (!targets.includes(finger)) targets.push(finger);
+                }
+            } else {
+                const count = Math.floor(Math.random() * 3) + 2;
+                while (targets.length < count) {
+                    const idx = Math.floor(Math.random() * 5);
+                    const finger = fingerNames[idx];
+                    if (!targets.includes(finger)) targets.push(finger);
+                }
+            }
+            
+            gameState.targetFingers = targets;
+            updateTargetDisplay();
+        }
+
+        // Update target display
+        function updateTargetDisplay() {
+            const container = document.getElementById('targetFingers');
+            container.innerHTML = gameState.targetFingers
+                .map(f => `<div class="finger-badge">${f}</div>`)
+                .join('');
+        }
+
+        // Update UI
+        function updateUI() {
+            const level = levels[gameState.level];
+            document.getElementById('levelBadge').textContent = 
+                `Level ${gameState.level} - ${level.label}`;
+            document.getElementById('score').textContent = gameState.score;
+            document.getElementById('gestures').textContent = 
+                `${gameState.gestures}/${level.goal}`;
+            
+            const progress = (gameState.gestures / level.goal) * 100;
+            document.getElementById('progressFill').style.width = `${progress}%`;
+        }
+
+        // Show feedback
+        function showFeedback(text) {
+            const feedback = document.getElementById('feedback');
+            feedback.textContent = text;
+            feedback.classList.add('show');
+            setTimeout(() => feedback.classList.remove('show'), 800);
+        }
+
+        // Check if finger is extended (when all closed, only opened ones count)
+        function isFingerExtended(landmarks, tipIdx, baseIdx, fingerIndex) {
+            const tip = landmarks[tipIdx];
+            const base = landmarks[baseIdx];
+            
+            // Special handling for THUMB (index 4)
+            if (fingerIndex === 4) {
+                // For thumb: check if tip is significantly away from wrist (landmark 0)
+                const wrist = landmarks[0];
+                const dx = tip.x - wrist.x;
+                const dy = tip.y - wrist.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // Thumb is extended when it's far from wrist
+                // INCREASED threshold from 0.15 to 0.35 to prevent accidental detection
+                // when opening other fingers naturally
+                const extended = distance > 0.35;
+                console.log(`👍 THUMB DEBUG: wrist=(${wrist.x.toFixed(3)}, ${wrist.y.toFixed(3)}), tip=(${tip.x.toFixed(3)}, ${tip.y.toFixed(3)}), distance=${distance.toFixed(3)}, threshold=0.35, extended=${extended}`);
+                return extended;
+            }
+            
+            // For other fingers: check vertical position
+            const midIdx = baseIdx + 2;
+            const mid = landmarks[midIdx];
+            
+            // Finger is extended if:
+            // 1. Tip is significantly ABOVE (lower Y) the middle knuckle
+            // 2. AND middle knuckle is above the base
+            const tipAboveMid = tip.y < mid.y - 0.03;
+            const midAboveBase = mid.y < base.y - 0.02;
+            
+            return tipAboveMid && midAboveBase;
+        }
+
+        // Flag to track if we've received first frame
+        let firstFrameReceived = false;
+
+        // Game loop (continuous frame update)
+        function gameLoop() {
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Process hand results
+        function onResults(results) {
+            if (!firstFrameReceived) {
+                firstFrameReceived = true;
+                loading.style.display = 'none';
+                canvasElement.width = window.innerWidth;
+                canvasElement.height = window.innerHeight;
+                generateTarget();
+                updateUI();
+                // Start animation loop on first frame
+                if (!window.gameLoopStarted) {
+                    window.gameLoopStarted = true;
+                    requestAnimationFrame(gameLoop);
+                    console.log('✅ First frame received, trainer started');
+                }
+            }
+            
+            console.log('📊 onResults called');  // DEBUG
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            
+            // Draw camera feed
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    // Draw hand
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS,
+                                 {color: 'rgba(0, 242, 254, 0.8)', lineWidth: 4});
+                    drawLandmarks(canvasCtx, landmarks,
+                                {color: 'rgba(79, 172, 254, 0.8)', lineWidth: 2, radius: 6});
+
+                    // Detect extended fingers
+                    const extendedFingers = [];
+                    for (let i = 0; i < 5; i++) {
+                        if (isFingerExtended(landmarks, fingerTips[i], fingerBases[i], i)) {
+                            extendedFingers.push(fingerNames[i]);
+                            if (i === 4) {  // THUMB
+                                console.log(`✅ THUMB ADDED TO EXTENDED FINGERS`);
+                            }
+                        }
+                    }
+                    
+                    // Special debug: Show if THUMB is in target
+                    if (gameState.targetFingers.includes('THUMB')) {
+                        console.log(`🎯 TARGET INCLUDES THUMB`);
+                        console.log(`🖐️ THUMB IN EXTENDED? ${extendedFingers.includes('THUMB')}`);
+                    }
+                    
+                    console.log('🖐️ Extended fingers:', extendedFingers.join(', ') || 'None');
+                    console.log('🎯 Target fingers:', gameState.targetFingers.join(', '));
+
+                    gameState.currentFingers = extendedFingers;
+
+                    // ROBUST MATCHING LOGIC - Production grade
+                    // Rule 1: All target fingers MUST be extended
+                    const allTargetsExtended = gameState.targetFingers.every(f => 
+                        extendedFingers.includes(f));
+                    
+                    // Rule 2: Count extra fingers (not in target)
+                    const extraFingersCount = extendedFingers.filter(f => 
+                        !gameState.targetFingers.includes(f)).length;
+                    
+                    // Rule 3: Maximum tolerance based on target size
+                    // Target 1 finger: allow 0-1 extra
+                    // Target 2 fingers: allow 0-1 extra
+                    // Target 3+ fingers: allow 0 extra
+                    const maxAllowedExtra = gameState.targetFingers.length <= 2 ? 1 : 0;
+                    
+                    // Rule 4: Prevent whole palm detection
+                    // If more than 3 fingers extended but target is small, reject
+                    const tooManyExtended = extendedFingers.length > 3 && gameState.targetFingers.length <= 2;
+                    
+                    // Final decision: Match is valid if all conditions pass
+                    const isValidMatch = allTargetsExtended && 
+                                        extraFingersCount <= maxAllowedExtra && 
+                                        !tooManyExtended &&
+                                        !gameState.lastMatch;
+                    
+                    // Debug log with detailed info - ESPECIALLY FOR THUMB
+                    if (gameState.targetFingers.includes('THUMB')) {
+                        console.log(`🔍 THUMB MATCHING DEBUG:`);
+                        console.log(`  - allTargetsExtended: ${allTargetsExtended}`);
+                        console.log(`  - extraFingersCount: ${extraFingersCount}`);
+                        console.log(`  - maxAllowedExtra: ${maxAllowedExtra}`);
+                        console.log(`  - tooManyExtended: ${tooManyExtended}`);
+                        console.log(`  - gameState.lastMatch: ${gameState.lastMatch}`);
+                        console.log(`  - isValidMatch: ${isValidMatch}`);
+                    }
+                    
+                    if (allTargetsExtended) {
+                        console.log(`📊 Match Check: Target=${gameState.targetFingers.join(',')}, Extended=${extendedFingers.join(',')}, Extra=${extraFingersCount}, Valid=${isValidMatch}`);
+                    }
+                    
+                    if (isValidMatch) {
+                        console.log('✅ MATCH DETECTED! Target met:', gameState.targetFingers.join(', '));
+                        gameState.lastMatch = true;
+                        gameState.gestures += 1;
+                        gameState.score += 10;
+                        showFeedback('✓ Perfect!');
+
+                        const level = levels[gameState.level];
+                        if (gameState.gestures >= level.goal) {
+                            if (gameState.level < 4) {
+                                gameState.level += 1;
+                                showFeedback('🎉 Level Up!');
+                            } else {
+                                showFeedback('🏆 Master!');
+                            }
+                            gameState.gestures = 0;
+                        }
+
+                        generateTarget();
+                        updateUI();
+                    } else if (!allTargetsExtended) {
+                        gameState.lastMatch = false;
+                    }
+
+                    // Highlight matching fingers
+                    for (let i = 0; i < 5; i++) {
+                        if (extendedFingers.includes(fingerNames[i]) && 
+                            gameState.targetFingers.includes(fingerNames[i])) {
+                            const tip = landmarks[fingerTips[i]];
+                            const x = (1 - tip.x) * canvasElement.width;
+                            const y = tip.y * canvasElement.height;
+                            
+                            canvasCtx.beginPath();
+                            canvasCtx.arc(x, y, 15, 0, Math.PI * 2);
+                            canvasCtx.fillStyle = 'rgba(0, 255, 100, 0.5)';
+                            canvasCtx.fill();
+                        }
+                    }
+                }
+            }
+
+            canvasCtx.restore();
+        }
+
+        // Initialize MediaPipe Hands
+        const hands = new Hands({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }
+        });
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.7
+        });
+
+        hands.onResults(onResults);
+        console.log('🤖 MediaPipe Hands ready');  // DEBUG
+
+        // Initialize camera
+        function initializeCamera() {
+            console.log('🎥 === CAMERA INITIALIZATION START ===');
+            console.log('📺 Video element:', videoElement);
+            console.log('🖼️ Canvas element:', canvasElement);
+            
+            const cameraConfig = {
+                onFrame: async () => {
+                    await hands.send({image: videoElement});
+                },
+                width: 1280,
+                height: 720
+            };
+            
+            console.log('📷 Creating Camera instance...');  // DEBUG
+            cameraInstance = new Camera(videoElement, cameraConfig);
+            console.log('✅ Camera instance created:', cameraInstance);  // DEBUG
+
+            // Start with error handling and timeout
+            console.log('⏱️ Setting 3-second timeout...');  // DEBUG
+            let loadingTimeout = setTimeout(() => {
+                loading.style.display = 'none';
+                canvasElement.width = videoElement.videoWidth || 1280;
+                canvasElement.height = videoElement.videoHeight || 720;
+                generateTarget();
+                updateUI();
+                console.log('✅ Game started (timeout)');
+            }, 3000);
+
+            console.log('🚀 Calling camera.start()...');  // DEBUG
+            cameraInstance.start()
+                .then(() => {
+                    console.log('✅ CAMERA START SUCCESS');  // DEBUG
+                    clearTimeout(loadingTimeout);
+                    loading.style.display = 'none';
+                    canvasElement.width = videoElement.videoWidth || 1280;
+                    canvasElement.height = videoElement.videoHeight || 720;
+                    generateTarget();
+                    updateUI();
+                    console.log('✅ Camera started successfully');
+                })
+                .catch((error) => {
+                    console.error('❌ CAMERA START FAILED:', error);  // DEBUG
+                    clearTimeout(loadingTimeout);
+                    console.error('❌ Camera error details:', error);
+                    loading.style.display = 'none';
+                    setTimeout(() => { alert('Camera error: ' + error.message); }, 500);
+                });
+        }
+        
+        // Initialize on page load
+        console.log('📄 Page loaded, starting initialization...');  // DEBUG
+        initializeCamera();
+    </script>
+</body>
+</html>
