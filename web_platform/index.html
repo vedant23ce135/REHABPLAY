@@ -507,6 +507,112 @@
             margin-bottom: 14px;
         }
 
+        .daily-quest {
+            border-radius: 12px;
+            border: 1px solid rgba(204, 255, 77, 0.22);
+            background: linear-gradient(145deg, rgba(33, 49, 24, 0.32), rgba(12, 22, 28, 0.38));
+            padding: 12px;
+            margin-bottom: 14px;
+        }
+
+        .daily-quest-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .daily-quest-head h4 {
+            font-family: Rajdhani, sans-serif;
+            font-size: 1.04rem;
+            color: #f6ffd8;
+        }
+
+        .daily-quest-date {
+            color: #acc488;
+            font-size: 0.75rem;
+            letter-spacing: 0.2px;
+        }
+
+        .daily-crown {
+            border-radius: 999px;
+            border: 1px solid rgba(255, 221, 87, 0.35);
+            background: rgba(255, 221, 87, 0.1);
+            color: #ffef9f;
+            font-size: 0.84rem;
+            font-weight: 700;
+            padding: 6px 10px;
+            white-space: nowrap;
+        }
+
+        .daily-tasks {
+            list-style: none;
+            display: grid;
+            gap: 8px;
+        }
+
+        .daily-task-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 8px 10px;
+            font-size: 0.82rem;
+            color: #cfe2f5;
+        }
+
+        .daily-task-item.done {
+            border-color: rgba(152, 255, 96, 0.4);
+            background: rgba(152, 255, 96, 0.1);
+        }
+
+        .daily-task-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .daily-task-status {
+            width: 20px;
+            height: 20px;
+            border-radius: 999px;
+            display: grid;
+            place-items: center;
+            font-size: 0.72rem;
+            background: rgba(148, 163, 184, 0.18);
+            color: #94a3b8;
+            flex-shrink: 0;
+        }
+
+        .daily-task-item.done .daily-task-status {
+            background: rgba(16, 185, 129, 0.24);
+            color: #9ff8cb;
+        }
+
+        .daily-task-text {
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .daily-task-progress {
+            font-weight: 700;
+            color: #ebffd2;
+            white-space: nowrap;
+        }
+
+        .daily-quest-footer {
+            margin-top: 8px;
+            color: #a9c5df;
+            font-size: 0.78rem;
+        }
+
         .progress-kpi {
             border-radius: 12px;
             padding: 12px;
@@ -645,6 +751,35 @@
             white-space: nowrap;
         }
 
+        .leader-crown {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            font-size: 0.9rem;
+            margin-right: 6px;
+            flex-shrink: 0;
+            background: rgba(148, 163, 184, 0.2);
+            border: 1px solid rgba(148, 163, 184, 0.34);
+        }
+
+        .leader-crown.gold {
+            background: rgba(255, 215, 0, 0.2);
+            border-color: rgba(255, 215, 0, 0.45);
+        }
+
+        .leader-crown.silver {
+            background: rgba(192, 192, 192, 0.2);
+            border-color: rgba(192, 192, 192, 0.45);
+        }
+
+        .leader-crown.bronze {
+            background: rgba(205, 127, 50, 0.22);
+            border-color: rgba(205, 127, 50, 0.45);
+        }
+
         .leader-points {
             color: #ccff4d;
             font-weight: 700;
@@ -728,6 +863,8 @@
         .thumb-1 { background: linear-gradient(135deg, #3161ff, #7b34ff); }
         .thumb-2 { background: linear-gradient(135deg, #ff3f86, #ff8a3d); }
         .thumb-3 { background: linear-gradient(135deg, #00a9ff, #00e5b1); }
+        .thumb-4 { background: linear-gradient(135deg, #22d3ee, #f59e0b); }
+        .thumb-5 { background: linear-gradient(135deg, #14b8a6, #3b82f6); }
 
         .game-content {
             padding: 18px;
@@ -1297,6 +1434,18 @@
                 </div>
             </div>
 
+            <section class="daily-quest" id="dailyQuest">
+                <div class="daily-quest-head">
+                    <div>
+                        <h4>Daily Tasks</h4>
+                        <p class="daily-quest-date" id="dailyQuestDate">Today</p>
+                    </div>
+                    <div class="daily-crown" id="dailyCrown">No Crown Yet</div>
+                </div>
+                <ul class="daily-tasks" id="dailyTaskList"></ul>
+                <p class="daily-quest-footer" id="dailyQuestSummary">Complete daily challenges from existing games to earn your crown.</p>
+            </section>
+
             <div class="progress-lists">
                 <div class="progress-list-box">
                     <h4>Best Per Game</h4>
@@ -1314,6 +1463,8 @@
                             <option value="shoulder-rehab">Shoulder Rehab</option>
                             <option value="object-catch">Pinch and Catch</option>
                             <option value="finger-trainer">Finger Trainer</option>
+                            <option value="mirror-moves">Mirror Moves</option>
+                            <option value="shape-tracing">Shape Tracing</option>
                         </select>
                     </div>
                     <ul class="progress-list leaderboard-list" id="leaderboardList"></ul>
@@ -1367,6 +1518,10 @@
         const recentSessionsList = document.getElementById('recentSessionsList');
         const leaderboardList = document.getElementById('leaderboardList');
         const leaderboardGameFilter = document.getElementById('leaderboardGameFilter');
+        const dailyQuestDate = document.getElementById('dailyQuestDate');
+        const dailyCrown = document.getElementById('dailyCrown');
+        const dailyTaskList = document.getElementById('dailyTaskList');
+        const dailyQuestSummary = document.getElementById('dailyQuestSummary');
 
         const GAME_REGISTRY = [
             {
@@ -1395,11 +1550,30 @@
                 description: 'Progressive finger targeting challenges across levels to develop dexterity and control.',
                 tags: ['Advanced', 'Hand Tracking'],
                 thumbClass: 'thumb-3'
+            },
+            {
+                id: 'mirror-moves',
+                route: '/web_platform/games/mirror_moves_prototype.html',
+                icon: '🪞',
+                title: 'Mirror Moves',
+                description: 'Follow guided full-body poses with hold timing, streak scoring, and adaptive feedback.',
+                tags: ['Medium', 'Pose Training'],
+                thumbClass: 'thumb-4'
+            },
+            {
+                id: 'shape-tracing',
+                route: '/web_platform/games/shape_tracing_prototype.html',
+                icon: '✍️',
+                title: 'Shape Tracing',
+                description: 'Trace guided paths with your index finger to improve motor control and precision.',
+                tags: ['Beginner', 'Hand Tracking'],
+                thumbClass: 'thumb-5'
             }
         ];
 
         const ACTIVE_PATIENT_STORAGE_KEY = 'rehabplay.active_patient.v1';
         const PROGRESS_STORAGE_KEY_PREFIX = 'rehabplay.progress.v2.';
+        const DAILY_TASK_STORAGE_KEY_PREFIX = 'rehabplay.daily_tasks.v1.';
         const apiBase = `${window.location.protocol}//${window.location.hostname}:5000`;
 
         let introBusy = false;
@@ -1471,6 +1645,222 @@
 
         function progressStorageKey() {
             return `${PROGRESS_STORAGE_KEY_PREFIX}${currentUserId}`;
+        }
+
+        function dailyTaskStorageKey() {
+            return `${DAILY_TASK_STORAGE_KEY_PREFIX}${currentUserId}`;
+        }
+
+        function dateKeyFromDate(date) {
+            return date.toISOString().slice(0, 10);
+        }
+
+        function todayDateKey() {
+            return dateKeyFromDate(new Date());
+        }
+
+        function localDateLabel(dateKey) {
+            const date = new Date(`${dateKey}T00:00:00`);
+            if (Number.isNaN(date.getTime())) {
+                return 'Today';
+            }
+            return date.toLocaleDateString(undefined, {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+
+        function dateKeyFromIso(isoTime) {
+            const date = new Date(isoTime);
+            if (Number.isNaN(date.getTime())) {
+                return '';
+            }
+            return dateKeyFromDate(date);
+        }
+
+        function seededNumber(seedText) {
+            let hash = 0;
+            const text = String(seedText || 'rehabplay');
+            for (let i = 0; i < text.length; i += 1) {
+                hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+            }
+            return Math.abs(hash);
+        }
+
+        function pickGameId(seedBase, offset = 0) {
+            const idx = seededNumber(`${seedBase}:${offset}`) % GAME_REGISTRY.length;
+            return GAME_REGISTRY[idx].id;
+        }
+
+        function readDailyTaskPlan() {
+            try {
+                const raw = localStorage.getItem(dailyTaskStorageKey());
+                if (!raw) {
+                    return null;
+                }
+                const parsed = JSON.parse(raw);
+                if (!parsed || !parsed.dateKey || !Array.isArray(parsed.tasks)) {
+                    return null;
+                }
+                return parsed;
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function writeDailyTaskPlan(plan) {
+            localStorage.setItem(dailyTaskStorageKey(), JSON.stringify(plan));
+        }
+
+        function createDailyTaskPlan(dateKey) {
+            const seed = `${currentUserId}:${dateKey}`;
+            const gameOne = pickGameId(seed, 1);
+            const gameTwo = pickGameId(seed, 2);
+            const minSessions = 2 + (seededNumber(`${seed}:sessions`) % 2);
+            const scoreGoal = 90 + (seededNumber(`${seed}:score`) % 4) * 30;
+
+            return {
+                dateKey,
+                tasks: [
+                    {
+                        id: 'session-count',
+                        label: `Complete ${minSessions} sessions today`,
+                        type: 'session-count',
+                        target: minSessions
+                    },
+                    {
+                        id: 'play-specific',
+                        label: `Play ${gameTitleById(gameOne)} once`,
+                        type: 'play-game',
+                        target: 1,
+                        gameId: gameOne
+                    },
+                    {
+                        id: 'score-goal',
+                        label: `Score ${scoreGoal}+ in ${gameTitleById(gameTwo)}`,
+                        type: 'score-game',
+                        target: scoreGoal,
+                        gameId: gameTwo
+                    }
+                ]
+            };
+        }
+
+        function ensureDailyTaskPlan() {
+            const today = todayDateKey();
+            const existing = readDailyTaskPlan();
+            if (existing && existing.dateKey === today) {
+                return existing;
+            }
+            const nextPlan = createDailyTaskPlan(today);
+            writeDailyTaskPlan(nextPlan);
+            return nextPlan;
+        }
+
+        function evaluateDailyTasks(plan, sessions) {
+            const daySessions = (sessions || []).filter((session) => dateKeyFromIso(session.completed_at) === plan.dateKey);
+
+            const evaluated = plan.tasks.map((task) => {
+                let progress = 0;
+                if (task.type === 'session-count') {
+                    progress = daySessions.length;
+                } else if (task.type === 'play-game') {
+                    progress = daySessions.filter((session) => session.game_id === task.gameId).length;
+                } else if (task.type === 'score-game') {
+                    progress = daySessions
+                        .filter((session) => session.game_id === task.gameId)
+                        .reduce((best, session) => Math.max(best, Number(session.score || 0)), 0);
+                }
+
+                const done = progress >= task.target;
+                const displayProgress = task.type === 'score-game'
+                    ? `${Math.min(progress, task.target)}/${task.target}`
+                    : `${Math.min(progress, task.target)}/${task.target}`;
+
+                return {
+                    ...task,
+                    done,
+                    progress,
+                    displayProgress
+                };
+            });
+
+            const completed = evaluated.filter((task) => task.done).length;
+            return {
+                dateKey: plan.dateKey,
+                tasks: evaluated,
+                completed,
+                total: evaluated.length
+            };
+        }
+
+        function crownForCompletion(completedCount) {
+            if (completedCount >= 3) {
+                return { label: 'Gold Crown', icon: '👑' };
+            }
+            if (completedCount === 2) {
+                return { label: 'Silver Crown', icon: '🥈' };
+            }
+            if (completedCount === 1) {
+                return { label: 'Bronze Crown', icon: '🥉' };
+            }
+            return { label: 'No Crown Yet', icon: '⭕' };
+        }
+
+        function renderDailyTasks(state) {
+            const plan = ensureDailyTaskPlan();
+            const evaluation = evaluateDailyTasks(plan, (state && state.sessions) ? state.sessions : []);
+            const crown = crownForCompletion(evaluation.completed);
+
+            dailyQuestDate.textContent = `For ${localDateLabel(evaluation.dateKey)}`;
+            dailyCrown.textContent = `${crown.icon} ${crown.label}`;
+
+            dailyTaskList.innerHTML = evaluation.tasks.map((task) => {
+                const doneClass = task.done ? 'done' : '';
+                const marker = task.done ? '✓' : '○';
+                return `
+                    <li class="daily-task-item ${doneClass}">
+                        <span class="daily-task-left">
+                            <span class="daily-task-status">${marker}</span>
+                            <span class="daily-task-text">${escapeHtml(task.label)}</span>
+                        </span>
+                        <span class="daily-task-progress">${task.displayProgress}</span>
+                    </li>
+                `;
+            }).join('');
+
+            dailyQuestSummary.textContent = `${evaluation.completed}/${evaluation.total} tasks done today.`;
+        }
+
+        function renderDailyTasksFromBackend(payload) {
+            if (!payload || !Array.isArray(payload.tasks)) {
+                return;
+            }
+
+            const dateLabel = localDateLabel(payload.date_key || todayDateKey());
+            const crownIcon = payload.crown_tier === 'gold'
+                ? '👑'
+                : (payload.crown_tier === 'silver' ? '🥈' : (payload.crown_tier === 'bronze' ? '🥉' : '⭕'));
+
+            dailyQuestDate.textContent = `For ${dateLabel}`;
+            dailyCrown.textContent = `${crownIcon} ${payload.crown_label || 'No crown'}`;
+
+            dailyTaskList.innerHTML = payload.tasks.map((task) => {
+                const doneClass = task.done ? 'done' : '';
+                const marker = task.done ? '✓' : '○';
+                return `
+                    <li class="daily-task-item ${doneClass}">
+                        <span class="daily-task-left">
+                            <span class="daily-task-status">${marker}</span>
+                            <span class="daily-task-text">${escapeHtml(task.label || '')}</span>
+                        </span>
+                        <span class="daily-task-progress">${escapeHtml(task.display_progress || '')}</span>
+                    </li>
+                `;
+            }).join('');
+
+            dailyQuestSummary.textContent = `${Number(payload.completed || 0)}/${Number(payload.total || 0)} tasks done today.`;
         }
 
         function renderPatientIdentity() {
@@ -1669,6 +2059,15 @@
             return response.json();
         }
 
+        async function fetchBackendDailyTasks() {
+            const url = `${apiBase}/api/progress/daily_tasks?user_id=${encodeURIComponent(currentUserId)}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error('Daily tasks unavailable');
+            }
+            return response.json();
+        }
+
         async function fetchBackendLeaderboard(limit = 10, gameId = 'all') {
             const params = new URLSearchParams({ limit: String(limit) });
             if (gameId && gameId !== 'all') {
@@ -1702,6 +2101,19 @@
                 .join(' ');
         }
 
+        function crownFromTier(tier, label) {
+            if (tier === 'gold') {
+                return { icon: '👑', className: 'gold', label: label || 'Gold crown earned from daily tasks' };
+            }
+            if (tier === 'silver') {
+                return { icon: '👑', className: 'silver', label: label || 'Silver crown earned from daily tasks' };
+            }
+            if (tier === 'bronze') {
+                return { icon: '👑', className: 'bronze', label: label || 'Bronze crown earned from daily tasks' };
+            }
+            return null;
+        }
+
         function renderLeaderboard(payload) {
             const rows = (payload && Array.isArray(payload.leaderboard)) ? payload.leaderboard : [];
             if (!rows.length) {
@@ -1714,10 +2126,15 @@
                 const rankClass = rank <= 3 ? `rank-${rank}` : '';
                 const userName = row.patient_name || displayNameFromUserId(row.user_id);
                 const me = row.user_id === currentUserId ? ' (You)' : '';
+                const crown = crownFromTier(row.crown_tier, row.crown_label);
+                const crownHtml = crown
+                    ? `<span class="leader-crown ${crown.className}" title="${crown.label}" aria-label="${crown.label}">${crown.icon}</span>`
+                    : '';
                 return `
                     <li>
                         <span class="leader-left">
                             <span class="rank-badge ${rankClass}">${rank}</span>
+                            ${crownHtml}
                             <span class="leader-name">${escapeHtml(userName)}${me}</span>
                         </span>
                         <span class="leader-points">${Number(row.total_points || 0)} pts</span>
@@ -1738,10 +2155,14 @@
         async function loadProgress() {
             progressState = readLocalProgress();
             renderProgress(summarizeProgress(progressState));
+            renderDailyTasks(progressState);
 
             try {
                 const backendSummary = await fetchBackendSummary();
                 renderProgress(backendSummary);
+
+                const dailyTasksPayload = await fetchBackendDailyTasks();
+                renderDailyTasksFromBackend(dailyTasksPayload);
             } catch (error) {
                 // Local summary already rendered as fallback.
             }
@@ -1754,6 +2175,7 @@
             writeLocalProgress(current);
             progressState = current;
             renderProgress(summarizeProgress(current));
+            renderDailyTasks(current);
         }
 
         async function saveSessionBackend(sessionPayload) {
@@ -2162,6 +2584,7 @@
             writeLocalProgress({ sessions: [] });
             progressState = { sessions: [] };
             renderProgress(summarizeProgress(progressState));
+            renderDailyTasks(progressState);
 
             try {
                 await deleteCurrentPatientDataBackend();

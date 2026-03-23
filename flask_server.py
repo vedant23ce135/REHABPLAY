@@ -12,6 +12,7 @@ import threading
 import base64
 import importlib.util
 import sqlite3
+import hashlib
 from pathlib import Path
 from datetime import datetime
 
@@ -35,6 +36,16 @@ frame_lock = threading.Lock()
 
 DB_PATH = Path('progress_data.db')
 
+GAME_CATALOG = {
+    'shoulder-rehab': 'Shoulder Rehab',
+    'object-catch': 'Pinch and Catch',
+    'finger-trainer': 'Finger Trainer',
+    'mirror-moves': 'Mirror Moves',
+    'shape-tracing': 'Shape Tracing'
+}
+
+DAILY_GAME_IDS = list(GAME_CATALOG.keys())
+
 
 def get_db_connection():
     """Create SQLite connection with dict-like rows."""
@@ -49,6 +60,111 @@ def display_name_from_user_id(user_id):
     if not slug:
         return 'Patient'
     return ' '.join(part.capitalize() for part in slug.split('-') if part)
+
+
+def stable_int(seed_text):
+    """Generate stable positive integer from a seed string."""
+    digest = hashlib.sha256(seed_text.encode('utf-8')).hexdigest()
+    return int(digest[:12], 16)
+
+
+def game_title_from_id(game_id):
+    """Return friendly game title for known game ids."""
+    return GAME_CATALOG.get(game_id, game_id)
+
+
+def build_daily_task_plan(user_id, date_key):
+    """Create deterministic daily tasks for a user and date."""
+    seed_base = f'{user_id}:{date_key}'
+
+    game_one = DAILY_GAME_IDS[stable_int(seed_base + ':game1') % len(DAILY_GAME_IDS)]
+    game_two = DAILY_GAME_IDS[stable_int(seed_base + ':game2') % len(DAILY_GAME_IDS)]
+    if game_two == game_one:
+        game_two = DAILY_GAME_IDS[(DAILY_GAME_IDS.index(game_one) + 1) % len(DAILY_GAME_IDS)]
+
+    min_sessions = 2 + (stable_int(seed_base + ':sessions') % 2)
+    score_goal = 90 + (stable_int(seed_base + ':score') % 4) * 30
+
+    return {
+        'date_key': date_key,
+        'tasks': [
+            {
+                'id': 'session-count',
+                'label': f'Complete {min_sessions} sessions today',
+                'type': 'session-count',
+                'target': min_sessions
+            },
+            {
+                'id': 'play-specific',
+                'label': f'Play {game_title_from_id(game_one)} once',
+                'type': 'play-game',
+                'target': 1,
+                'game_id': game_one
+            },
+            {
+                'id': 'score-goal',
+                'label': f'Score {score_goal}+ in {game_title_from_id(game_two)}',
+                'type': 'score-game',
+                'target': score_goal,
+                'game_id': game_two
+            }
+        ]
+    }
+
+
+def fetch_user_day_sessions(conn, user_id, date_key):
+    """Fetch one user's sessions for a UTC date key (YYYY-MM-DD)."""
+    return conn.execute(
+        """
+        SELECT game_id, score, duration_seconds, completed_at
+        FROM sessions
+        WHERE user_id = ? AND completed_at LIKE ?
+        ORDER BY completed_at DESC
+        """,
+        (user_id, f'{date_key}%')
+    ).fetchall()
+
+
+def evaluate_daily_tasks(plan, day_sessions):
+    """Evaluate daily task progress from a task plan and day sessions."""
+    evaluated = []
+    for task in plan['tasks']:
+        progress = 0
+        if task['type'] == 'session-count':
+            progress = len(day_sessions)
+        elif task['type'] == 'play-game':
+            progress = sum(1 for session in day_sessions if session['game_id'] == task.get('game_id'))
+        elif task['type'] == 'score-game':
+            score_values = [int(session['score'] or 0) for session in day_sessions if session['game_id'] == task.get('game_id')]
+            progress = max(score_values) if score_values else 0
+
+        target = int(task.get('target', 0))
+        done = progress >= target
+        evaluated.append({
+            **task,
+            'progress': int(progress),
+            'done': bool(done),
+            'display_progress': f"{min(int(progress), target)}/{target}"
+        })
+
+    completed = sum(1 for task in evaluated if task['done'])
+    return {
+        'date_key': plan['date_key'],
+        'tasks': evaluated,
+        'completed': completed,
+        'total': len(evaluated)
+    }
+
+
+def crown_for_completed_tasks(completed):
+    """Get crown tier metadata from completed task count."""
+    if completed >= 3:
+        return {'tier': 'gold', 'label': 'Gold crown'}
+    if completed == 2:
+        return {'tier': 'silver', 'label': 'Silver crown'}
+    if completed == 1:
+        return {'tier': 'bronze', 'label': 'Bronze crown'}
+    return {'tier': 'none', 'label': 'No crown'}
 
 
 def init_progress_db():
@@ -361,6 +477,7 @@ def progress_leaderboard():
         query_params.append(game_id)
 
     conn = get_db_connection()
+    date_key = datetime.utcnow().strftime('%Y-%m-%d')
     leaderboard_rows = conn.execute(
         f"""
         SELECT
@@ -392,17 +509,54 @@ def progress_leaderboard():
         """,
         tuple(query_params + [limit])
     ).fetchall()
-    conn.close()
 
     leaderboard = []
     for row in leaderboard_rows:
         entry = dict(row)
         if not entry.get('patient_name'):
             entry['patient_name'] = display_name_from_user_id(entry.get('user_id', ''))
+
+        plan = build_daily_task_plan(entry.get('user_id', ''), date_key)
+        day_sessions = fetch_user_day_sessions(conn, entry.get('user_id', ''), date_key)
+        evaluation = evaluate_daily_tasks(plan, day_sessions)
+        crown = crown_for_completed_tasks(evaluation['completed'])
+        entry['crown_tier'] = crown['tier']
+        entry['crown_label'] = crown['label']
+        entry['daily_tasks_completed'] = int(evaluation['completed'])
+        entry['daily_tasks_total'] = int(evaluation['total'])
+
         leaderboard.append(entry)
+
+    conn.close()
 
     return jsonify({
         'leaderboard': leaderboard
+    })
+
+
+@app.route('/api/progress/daily_tasks')
+def progress_daily_tasks():
+    """Get deterministic daily tasks, progress, and crown tier for one user."""
+    user_id = (request.args.get('user_id') or 'demo-user').strip()
+    date_key = datetime.utcnow().strftime('%Y-%m-%d')
+
+    plan = build_daily_task_plan(user_id, date_key)
+
+    conn = get_db_connection()
+    day_sessions = fetch_user_day_sessions(conn, user_id, date_key)
+    conn.close()
+
+    evaluation = evaluate_daily_tasks(plan, day_sessions)
+    crown = crown_for_completed_tasks(evaluation['completed'])
+
+    return jsonify({
+        'user_id': user_id,
+        'date_key': date_key,
+        'tasks': evaluation['tasks'],
+        'completed': int(evaluation['completed']),
+        'total': int(evaluation['total']),
+        'crown_tier': crown['tier'],
+        'crown_label': crown['label']
     })
 
 def generate_frames():

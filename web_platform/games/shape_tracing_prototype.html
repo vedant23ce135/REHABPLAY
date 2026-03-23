@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shape Tracing Prototype</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg1: #0f172a;
+            --bg2: #1e293b;
+            --panel: rgba(15, 23, 42, 0.84);
+            --line: rgba(148, 163, 184, 0.28);
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --accent: #22d3ee;
+            --accent2: #f59e0b;
+            --good: #10b981;
+            --warn: #f97316;
+        }
+
+        body {
+            font-family: "Trebuchet MS", "Segoe UI", Tahoma, sans-serif;
+            min-height: 100vh;
+            overflow: hidden;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 15% 18%, rgba(34, 211, 238, 0.24), transparent 40%),
+                radial-gradient(circle at 83% 12%, rgba(245, 158, 11, 0.25), transparent 36%),
+                linear-gradient(135deg, var(--bg1), var(--bg2));
+        }
+
+        .container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+        }
+
+        #output-canvas {
+            transform: scaleX(-1);
+            border-radius: 18px;
+            border: 2px solid var(--line);
+            width: min(96vw, 1400px);
+            height: min(92vh, 900px);
+            object-fit: contain;
+            background: #020617;
+            box-shadow: 0 20px 48px rgba(2, 6, 23, 0.55);
+        }
+
+        .video-input {
+            display: none;
+        }
+
+        .ui {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            width: 336px;
+            max-width: calc(100vw - 32px);
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 12px 32px rgba(2, 6, 23, 0.5);
+            backdrop-filter: blur(6px);
+        }
+
+        .title {
+            font-size: 1.28rem;
+            margin-bottom: 10px;
+            color: var(--accent);
+        }
+
+        .chip {
+            display: inline-block;
+            margin-bottom: 12px;
+            font-size: 0.82rem;
+            color: var(--muted);
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            padding: 6px 10px;
+            background: rgba(15, 23, 42, 0.7);
+        }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            border-radius: 10px;
+            background: rgba(148, 163, 184, 0.08);
+            padding: 8px 10px;
+            margin-top: 8px;
+            font-size: 0.92rem;
+        }
+
+        .label {
+            color: var(--muted);
+        }
+
+        .value {
+            font-weight: 700;
+        }
+
+        .hint {
+            margin-top: 10px;
+            min-height: 2.4em;
+            color: #bae6fd;
+            font-size: 0.92rem;
+            line-height: 1.3;
+        }
+
+        .controls {
+            margin-top: 12px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 10px;
+            padding: 10px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.15s ease, opacity 0.15s ease;
+        }
+
+        .btn:hover { transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+
+        .btn-main {
+            background: linear-gradient(90deg, var(--accent), #67e8f9);
+            color: #082f49;
+        }
+
+        .btn-neutral {
+            background: #334155;
+            color: #e2e8f0;
+        }
+
+        .shape-select {
+            margin-top: 10px;
+            width: 100%;
+            background: rgba(15, 23, 42, 0.94);
+            border: 1px solid rgba(34, 211, 238, 0.6);
+            color: var(--text);
+            border-radius: 10px;
+            padding: 8px 10px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            outline: none;
+            appearance: auto;
+            -webkit-appearance: menulist;
+            box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.2);
+        }
+
+        .shape-select:focus {
+            border-color: rgba(34, 211, 238, 1);
+            box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.22);
+        }
+
+        .shape-select option {
+            background: #0f172a;
+            color: #f8fafc;
+            font-weight: 700;
+        }
+
+        .progress-wrap {
+            margin-top: 10px;
+            width: 100%;
+            height: 12px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: rgba(100, 116, 139, 0.35);
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            transition: width 0.08s linear;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+        }
+
+        .loading,
+        .message {
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            text-align: center;
+            background: rgba(2, 6, 23, 0.64);
+            color: #f8fafc;
+            padding: 20px;
+        }
+
+        .message {
+            display: none;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.25);
+            border-top: 4px solid #ffffff;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 14px;
+        }
+
+        .flash {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2.3rem;
+            font-weight: 800;
+            color: #6ee7b7;
+            text-shadow: 0 0 18px rgba(16, 185, 129, 0.8);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 2;
+        }
+
+        .flash.show {
+            opacity: 1;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 900px) {
+            .ui {
+                top: auto;
+                left: 12px;
+                right: 12px;
+                bottom: 12px;
+                width: auto;
+            }
+
+            #output-canvas {
+                width: 100vw;
+                height: 100vh;
+                border-radius: 0;
+                border: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Initializing camera and hand model...</p>
+        </div>
+
+        <div class="message" id="message"></div>
+
+        <video class="video-input" id="video" autoplay playsinline></video>
+        <canvas id="output-canvas"></canvas>
+
+        <div class="ui">
+            <h1 class="title">Shape Tracing Prototype</h1>
+            <div class="chip">Prototype: isolated test build</div>
+
+            <div class="row"><span class="label">Shape</span><span class="value" id="shapeName">Circle</span></div>
+            <div class="row"><span class="label">Level</span><span class="value" id="levelName">Easy</span></div>
+            <div class="row"><span class="label">Progress</span><span class="value" id="progressText">0%</span></div>
+            <div class="row"><span class="label">Score</span><span class="value" id="score">0</span></div>
+            <div class="row"><span class="label">Best</span><span class="value" id="best">0</span></div>
+
+            <div class="progress-wrap"><div class="progress-fill" id="progressFill"></div></div>
+            <div class="hint" id="hint">Use your index finger tip to trace the glowing path from start to finish.</div>
+
+            <select class="shape-select" id="levelSelect">
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+            </select>
+
+            <select class="shape-select" id="shapeSelect">
+                <option value="circle">Circle</option>
+                <option value="square">Square</option>
+                <option value="triangle">Triangle</option>
+                <option value="infinity">Infinity</option>
+            </select>
+
+            <div class="controls">
+                <button class="btn btn-main" onclick="startTrace()">Start Trace</button>
+                <button class="btn btn-neutral" onclick="resetTrace()">Reset</button>
+            </div>
+        </div>
+
+        <div class="flash" id="flash">Great!</div>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById("video");
+        const canvasElement = document.getElementById("output-canvas");
+        const canvasCtx = canvasElement.getContext("2d");
+        const loading = document.getElementById("loading");
+        const message = document.getElementById("message");
+
+        const ui = {
+            shapeName: document.getElementById("shapeName"),
+            levelName: document.getElementById("levelName"),
+            progressText: document.getElementById("progressText"),
+            score: document.getElementById("score"),
+            best: document.getElementById("best"),
+            progressFill: document.getElementById("progressFill"),
+            hint: document.getElementById("hint"),
+            flash: document.getElementById("flash"),
+            levelSelect: document.getElementById("levelSelect"),
+            shapeSelect: document.getElementById("shapeSelect")
+        };
+
+        const BASE_TOLERANCE = 0.06;
+        const MIN_TOLERANCE = 0.038;
+        const LEVEL_CONFIG = {
+            easy: {
+                label: "Easy",
+                shapes: ["circle", "square", "diamond", "triangle"],
+                pathPoints: 90,
+                toleranceScale: 1.2
+            },
+            medium: {
+                label: "Medium",
+                shapes: ["square", "triangle", "pentagon", "heart"],
+                pathPoints: 120,
+                toleranceScale: 1
+            },
+            hard: {
+                label: "Hard",
+                shapes: ["triangle", "infinity", "star", "spiral", "wave"],
+                pathPoints: 150,
+                toleranceScale: 0.84
+            }
+        };
+
+        const SHAPE_LABEL = {
+            circle: "Circle",
+            square: "Square",
+            triangle: "Triangle",
+            infinity: "Infinity",
+            diamond: "Diamond",
+            pentagon: "Pentagon",
+            star: "Star",
+            heart: "Heart",
+            spiral: "Spiral",
+            wave: "Wave"
+        };
+
+        const game = {
+            running: false,
+            activeLevel: "easy",
+            activeShape: "circle",
+            shapePoints: [],
+            progressIndex: 0,
+            score: 0,
+            best: 0,
+            totalSamples: 0,
+            accurateSamples: 0,
+            traceStartedAt: null,
+            lastTip: null
+        };
+
+        function distance(a, b) {
+            return Math.hypot(a.x - b.x, a.y - b.y);
+        }
+
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        function shapeCircle(points) {
+            const cx = 0.5;
+            const cy = 0.5;
+            const r = 0.22;
+            const out = [];
+            for (let i = 0; i < points; i += 1) {
+                const t = i / points;
+                const a = t * Math.PI * 2;
+                out.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+            }
+            return out;
+        }
+
+        function shapeSquare(points) {
+            const out = [];
+            const edge = Math.floor(points / 4);
+            const x1 = 0.28, y1 = 0.28, x2 = 0.72, y2 = 0.72;
+            for (let i = 0; i < edge; i += 1) out.push({ x: lerp(x1, x2, i / edge), y: y1 });
+            for (let i = 0; i < edge; i += 1) out.push({ x: x2, y: lerp(y1, y2, i / edge) });
+            for (let i = 0; i < edge; i += 1) out.push({ x: lerp(x2, x1, i / edge), y: y2 });
+            for (let i = 0; i < edge; i += 1) out.push({ x: x1, y: lerp(y2, y1, i / edge) });
+            return out;
+        }
+
+        function shapeTriangle(points) {
+            const out = [];
+            const edge = Math.floor(points / 3);
+            const p1 = { x: 0.5, y: 0.24 };
+            const p2 = { x: 0.76, y: 0.73 };
+            const p3 = { x: 0.24, y: 0.73 };
+            for (let i = 0; i < edge; i += 1) out.push({ x: lerp(p1.x, p2.x, i / edge), y: lerp(p1.y, p2.y, i / edge) });
+            for (let i = 0; i < edge; i += 1) out.push({ x: lerp(p2.x, p3.x, i / edge), y: lerp(p2.y, p3.y, i / edge) });
+            for (let i = 0; i < edge; i += 1) out.push({ x: lerp(p3.x, p1.x, i / edge), y: lerp(p3.y, p1.y, i / edge) });
+            return out;
+        }
+
+        function shapeInfinity(points) {
+            const out = [];
+            const cx = 0.5;
+            const cy = 0.52;
+            for (let i = 0; i < points; i += 1) {
+                const t = (i / points) * Math.PI * 2;
+                const denom = 1 + Math.sin(t) * Math.sin(t);
+                const x = cx + 0.25 * Math.cos(t) / denom;
+                const y = cy + 0.14 * Math.sin(t) * Math.cos(t) / denom;
+                out.push({ x, y });
+            }
+            return out;
+        }
+
+        function shapeDiamond(points) {
+            const out = [];
+            const edge = Math.floor(points / 4);
+            const p1 = { x: 0.5, y: 0.2 };
+            const p2 = { x: 0.77, y: 0.5 };
+            const p3 = { x: 0.5, y: 0.8 };
+            const p4 = { x: 0.23, y: 0.5 };
+
+            for (let i = 0; i < edge; i += 1) out.push({ x: lerp(p1.x, p2.x, i / edge), y: lerp(p1.y, p2.y, i / edge) });
+            for (let i = 0; i < edge; i += 1) out.push({ x: lerp(p2.x, p3.x, i / edge), y: lerp(p2.y, p3.y, i / edge) });
+            for (let i = 0; i < edge; i += 1) out.push({ x: lerp(p3.x, p4.x, i / edge), y: lerp(p3.y, p4.y, i / edge) });
+            for (let i = 0; i < edge; i += 1) out.push({ x: lerp(p4.x, p1.x, i / edge), y: lerp(p4.y, p1.y, i / edge) });
+            return out;
+        }
+
+        function shapePentagon(points) {
+            const out = [];
+            const vertices = [];
+            const cx = 0.5;
+            const cy = 0.52;
+            const r = 0.29;
+
+            for (let i = 0; i < 5; i += 1) {
+                const a = -Math.PI / 2 + i * (Math.PI * 2 / 5);
+                vertices.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+            }
+
+            const edge = Math.floor(points / 5);
+            for (let i = 0; i < 5; i += 1) {
+                const from = vertices[i];
+                const to = vertices[(i + 1) % 5];
+                for (let step = 0; step < edge; step += 1) {
+                    out.push({ x: lerp(from.x, to.x, step / edge), y: lerp(from.y, to.y, step / edge) });
+                }
+            }
+
+            return out;
+        }
+
+        function shapeStar(points) {
+            const out = [];
+            const vertices = [];
+            const cx = 0.5;
+            const cy = 0.52;
+            const outerR = 0.3;
+            const innerR = 0.14;
+
+            for (let i = 0; i < 10; i += 1) {
+                const a = -Math.PI / 2 + i * (Math.PI / 5);
+                const r = i % 2 === 0 ? outerR : innerR;
+                vertices.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+            }
+
+            const edge = Math.max(1, Math.floor(points / 10));
+            for (let i = 0; i < vertices.length; i += 1) {
+                const from = vertices[i];
+                const to = vertices[(i + 1) % vertices.length];
+                for (let step = 0; step < edge; step += 1) {
+                    out.push({ x: lerp(from.x, to.x, step / edge), y: lerp(from.y, to.y, step / edge) });
+                }
+            }
+
+            return out;
+        }
+
+        function shapeHeart(points) {
+            const out = [];
+            for (let i = 0; i < points; i += 1) {
+                const t = (i / points) * Math.PI * 2;
+                const x = 16 * Math.pow(Math.sin(t), 3);
+                const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+                out.push({
+                    x: 0.5 + (x / 36),
+                    y: 0.53 - (y / 36)
+                });
+            }
+            return out;
+        }
+
+        function shapeSpiral(points) {
+            const out = [];
+            const cx = 0.5;
+            const cy = 0.52;
+            const turns = 2.6;
+            for (let i = 0; i < points; i += 1) {
+                const t = i / (points - 1);
+                const a = t * Math.PI * 2 * turns;
+                const r = 0.06 + 0.24 * t;
+                out.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+            }
+            return out;
+        }
+
+        function shapeWave(points) {
+            const out = [];
+            for (let i = 0; i < points; i += 1) {
+                const t = i / (points - 1);
+                out.push({
+                    x: 0.18 + 0.64 * t,
+                    y: 0.52 + Math.sin(t * Math.PI * 4) * 0.16
+                });
+            }
+            return out;
+        }
+
+        function buildShapePoints(shape, points) {
+            if (shape === "square") return shapeSquare(points);
+            if (shape === "triangle") return shapeTriangle(points);
+            if (shape === "infinity") return shapeInfinity(points);
+            if (shape === "diamond") return shapeDiamond(points);
+            if (shape === "pentagon") return shapePentagon(points);
+            if (shape === "star") return shapeStar(points);
+            if (shape === "heart") return shapeHeart(points);
+            if (shape === "spiral") return shapeSpiral(points);
+            if (shape === "wave") return shapeWave(points);
+            return shapeCircle(points);
+        }
+
+        function currentLevelConfig() {
+            return LEVEL_CONFIG[game.activeLevel] || LEVEL_CONFIG.easy;
+        }
+
+        function applyLevel(level) {
+            const cfg = LEVEL_CONFIG[level] || LEVEL_CONFIG.easy;
+            game.activeLevel = level in LEVEL_CONFIG ? level : "easy";
+
+            ui.shapeSelect.innerHTML = cfg.shapes
+                .map((shape) => `<option value="${shape}">${SHAPE_LABEL[shape] || shape}</option>`)
+                .join("");
+
+            if (!cfg.shapes.includes(game.activeShape)) {
+                game.activeShape = cfg.shapes[0];
+            }
+
+            ui.shapeSelect.value = game.activeShape;
+            ui.levelSelect.value = game.activeLevel;
+        }
+
+        function setCanvasSize() {
+            const width = videoElement.videoWidth || 1280;
+            const height = videoElement.videoHeight || 720;
+            canvasElement.width = width;
+            canvasElement.height = height;
+        }
+
+        function setMessage(text) {
+            message.style.display = "flex";
+            message.innerHTML = `<h2 style=\"margin-bottom:10px;\">Camera Issue</h2><p>${text}</p>`;
+        }
+
+        function flash(text, color) {
+            ui.flash.textContent = text;
+            ui.flash.style.color = color;
+            ui.flash.classList.add("show");
+            setTimeout(() => ui.flash.classList.remove("show"), 400);
+        }
+
+        function updateUi() {
+            const levelCfg = currentLevelConfig();
+            ui.shapeName.textContent = SHAPE_LABEL[game.activeShape] || game.activeShape;
+            ui.levelName.textContent = levelCfg.label;
+            const progress = game.shapePoints.length ? Math.round((game.progressIndex / game.shapePoints.length) * 100) : 0;
+            ui.progressText.textContent = `${progress}%`;
+            ui.progressFill.style.width = `${progress}%`;
+            ui.score.textContent = String(game.score);
+            ui.best.textContent = String(game.best);
+        }
+
+        function resetTrace() {
+            game.running = false;
+            game.progressIndex = 0;
+            game.totalSamples = 0;
+            game.accurateSamples = 0;
+            game.traceStartedAt = null;
+            game.lastTip = null;
+            const levelCfg = currentLevelConfig();
+            game.shapePoints = buildShapePoints(game.activeShape, levelCfg.pathPoints);
+            ui.hint.textContent = "Use your index finger tip to trace the glowing path from start to finish.";
+            updateUi();
+        }
+
+        function startTrace() {
+            game.activeShape = ui.shapeSelect.value;
+            resetTrace();
+            game.running = true;
+            game.traceStartedAt = performance.now();
+            ui.hint.textContent = "Trace from the green start dot along the glowing route.";
+            updateUi();
+        }
+
+        function completeTrace() {
+            game.running = false;
+            const elapsed = Math.max(1, (performance.now() - game.traceStartedAt) / 1000);
+            const accuracy = game.totalSamples > 0 ? game.accurateSamples / game.totalSamples : 0;
+            const level = currentLevelConfig();
+            const difficultyMultiplier = game.activeLevel === "hard" ? 1.35 : (game.activeLevel === "medium" ? 1.15 : 1);
+            const speedBonus = Math.max(0, 22 - elapsed);
+            const runScore = Math.max(10, Math.round((accuracy * 70 + speedBonus * 2) * difficultyMultiplier));
+
+            game.score = runScore;
+            if (runScore > game.best) {
+                game.best = runScore;
+            }
+
+            ui.hint.textContent = `Completed in ${elapsed.toFixed(1)}s with ${Math.round(accuracy * 100)}% accuracy.`;
+            flash("Great Trace!", "#6ee7b7");
+            updateUi();
+        }
+
+        function drawShapeGuide(points, progressIdx) {
+            if (!points.length) return;
+
+            const w = canvasElement.width;
+            const h = canvasElement.height;
+
+            canvasCtx.lineWidth = 5;
+            canvasCtx.strokeStyle = "rgba(148, 163, 184, 0.35)";
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(points[0].x * w, points[0].y * h);
+            for (let i = 1; i < points.length; i += 1) {
+                canvasCtx.lineTo(points[i].x * w, points[i].y * h);
+            }
+            canvasCtx.closePath();
+            canvasCtx.stroke();
+
+            const drawTo = Math.max(1, progressIdx);
+            canvasCtx.lineWidth = 7;
+            canvasCtx.strokeStyle = "rgba(34, 211, 238, 0.95)";
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(points[0].x * w, points[0].y * h);
+            for (let i = 1; i < drawTo && i < points.length; i += 1) {
+                canvasCtx.lineTo(points[i].x * w, points[i].y * h);
+            }
+            canvasCtx.stroke();
+
+            const start = points[0];
+            const end = points[points.length - 1];
+
+            canvasCtx.fillStyle = "#22c55e";
+            canvasCtx.beginPath();
+            canvasCtx.arc(start.x * w, start.y * h, 10, 0, Math.PI * 2);
+            canvasCtx.fill();
+
+            canvasCtx.fillStyle = "#f97316";
+            canvasCtx.beginPath();
+            canvasCtx.arc(end.x * w, end.y * h, 8, 0, Math.PI * 2);
+            canvasCtx.fill();
+        }
+
+        function processTip(tip) {
+            if (!game.running || !game.shapePoints.length) {
+                return;
+            }
+
+            const target = game.shapePoints[game.progressIndex];
+            if (!target) {
+                completeTrace();
+                return;
+            }
+
+            const levelCfg = currentLevelConfig();
+            const dynamicTolerance = Math.max(MIN_TOLERANCE, (BASE_TOLERANCE - game.progressIndex * 0.00012) * levelCfg.toleranceScale);
+            const d = distance(tip, target);
+
+            game.totalSamples += 1;
+            if (d < dynamicTolerance * 1.4) {
+                game.accurateSamples += 1;
+            }
+
+            if (d <= dynamicTolerance) {
+                game.progressIndex += 1;
+                if (game.progressIndex >= game.shapePoints.length) {
+                    completeTrace();
+                    return;
+                }
+            }
+
+            if (game.progressIndex < 4) {
+                ui.hint.textContent = "Find the green start dot first.";
+            } else if (d > dynamicTolerance * 1.8) {
+                ui.hint.textContent = "Move closer to the glowing path.";
+            } else {
+                ui.hint.textContent = "Nice tracing. Keep following the route.";
+            }
+
+            updateUi();
+        }
+
+        function drawFingerTrail(tip) {
+            const x = tip.x * canvasElement.width;
+            const y = tip.y * canvasElement.height;
+
+            if (game.lastTip) {
+                canvasCtx.strokeStyle = "rgba(245, 158, 11, 0.8)";
+                canvasCtx.lineWidth = 4;
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(game.lastTip.x * canvasElement.width, game.lastTip.y * canvasElement.height);
+                canvasCtx.lineTo(x, y);
+                canvasCtx.stroke();
+            }
+
+            canvasCtx.fillStyle = "rgba(245, 158, 11, 0.95)";
+            canvasCtx.beginPath();
+            canvasCtx.arc(x, y, 9, 0, Math.PI * 2);
+            canvasCtx.fill();
+
+            game.lastTip = { x: tip.x, y: tip.y };
+        }
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            drawShapeGuide(game.shapePoints, game.progressIndex);
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const hand = results.multiHandLandmarks[0];
+                drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, { color: "rgba(34, 211, 238, 0.75)", lineWidth: 3 });
+                drawLandmarks(canvasCtx, hand, { color: "rgba(245, 158, 11, 0.95)", lineWidth: 1, radius: 4 });
+
+                const indexTip = hand[8];
+                drawFingerTrail(indexTip);
+                processTip(indexTip);
+            } else {
+                game.lastTip = null;
+                if (game.running) {
+                    ui.hint.textContent = "Show one hand to continue tracing.";
+                }
+            }
+
+            canvasCtx.restore();
+        }
+
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.65,
+            minTrackingConfidence: 0.65
+        });
+
+        hands.onResults(onResults);
+
+        async function initialize() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                loading.style.display = "none";
+                setMessage("Camera API is not available in this browser.");
+                return;
+            }
+
+            try {
+                const camera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        await hands.send({ image: videoElement });
+                    },
+                    width: 1280,
+                    height: 720
+                });
+
+                await camera.start();
+                setCanvasSize();
+                loading.style.display = "none";
+                resetTrace();
+            } catch (err) {
+                loading.style.display = "none";
+                setMessage(`Could not start camera. ${err && err.message ? err.message : "Please allow camera access and reload."}`);
+            }
+        }
+
+        ui.shapeSelect.addEventListener("change", () => {
+            game.activeShape = ui.shapeSelect.value;
+            resetTrace();
+        });
+
+        ui.levelSelect.addEventListener("change", () => {
+            applyLevel(ui.levelSelect.value);
+            resetTrace();
+            ui.hint.textContent = `Level set to ${currentLevelConfig().label}. Select one of the allowed shapes and start.`;
+        });
+
+        window.addEventListener("resize", setCanvasSize);
+        applyLevel("easy");
+        initialize();
+    </script>
+</body>
+</html>

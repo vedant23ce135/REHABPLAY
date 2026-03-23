@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mirror Moves Prototype</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-1: #0f172a;
+            --bg-2: #1e293b;
+            --panel: rgba(15, 23, 42, 0.86);
+            --line: rgba(148, 163, 184, 0.28);
+            --accent: #22d3ee;
+            --accent-2: #f59e0b;
+            --good: #10b981;
+            --warn: #f97316;
+            --bad: #ef4444;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+        }
+
+        body {
+            font-family: "Trebuchet MS", "Segoe UI", Tahoma, sans-serif;
+            min-height: 100vh;
+            overflow: hidden;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 12% 20%, rgba(34, 211, 238, 0.25), transparent 38%),
+                radial-gradient(circle at 88% 18%, rgba(245, 158, 11, 0.28), transparent 35%),
+                linear-gradient(135deg, var(--bg-1) 0%, var(--bg-2) 100%);
+        }
+
+        .container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 14px;
+        }
+
+        #output-canvas {
+            transform: scaleX(-1);
+            border-radius: 18px;
+            border: 2px solid var(--line);
+            box-shadow: 0 18px 48px rgba(2, 6, 23, 0.55);
+            width: min(96vw, 1400px);
+            height: min(92vh, 900px);
+            object-fit: contain;
+            background: #020617;
+        }
+
+        .video-input {
+            display: none;
+        }
+
+        .ui {
+            position: absolute;
+            top: 18px;
+            left: 18px;
+            width: 320px;
+            max-width: calc(100vw - 36px);
+            background: var(--panel);
+            backdrop-filter: blur(6px);
+            border-radius: 16px;
+            border: 1px solid var(--line);
+            padding: 18px;
+            box-shadow: 0 12px 34px rgba(2, 6, 23, 0.52);
+        }
+
+        .ui h1 {
+            font-size: 1.35rem;
+            letter-spacing: 0.3px;
+            margin-bottom: 12px;
+            color: var(--accent);
+        }
+
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 999px;
+            padding: 8px 12px;
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--line);
+            margin-bottom: 14px;
+            color: var(--muted);
+            font-size: 0.88rem;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            padding: 8px 10px;
+            border-radius: 10px;
+            background: rgba(148, 163, 184, 0.08);
+        }
+
+        .label {
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .value {
+            font-weight: 700;
+        }
+
+        .target {
+            margin-top: 14px;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(34, 211, 238, 0.4);
+            background: rgba(34, 211, 238, 0.08);
+        }
+
+        .target-title {
+            font-size: 0.8rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .target-name {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #ccfbf1;
+        }
+
+        .target-hint {
+            margin-top: 8px;
+            font-size: 0.9rem;
+            color: #bae6fd;
+            min-height: 2.2em;
+        }
+
+        .progress {
+            width: 100%;
+            height: 12px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: rgba(100, 116, 139, 0.3);
+            margin-top: 12px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            transition: width 0.08s linear;
+            background: linear-gradient(90deg, var(--accent), var(--accent-2));
+        }
+
+        .controls {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 0.92rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.15s ease, opacity 0.15s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-start {
+            background: var(--good);
+            color: #052e16;
+        }
+
+        .btn-reset {
+            background: #334155;
+            color: #e2e8f0;
+        }
+
+        .loading,
+        .message {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            text-align: center;
+            background: rgba(2, 6, 23, 0.62);
+            color: #f8fafc;
+            z-index: 3;
+        }
+
+        .message {
+            display: none;
+            padding: 24px;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.25);
+            border-top: 4px solid #ffffff;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        .flash {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2.6rem;
+            font-weight: 800;
+            text-shadow: 0 0 18px rgba(16, 185, 129, 0.8);
+            color: #6ee7b7;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            z-index: 2;
+        }
+
+        .flash.show {
+            opacity: 1;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 900px) {
+            .container {
+                align-items: flex-end;
+            }
+
+            .ui {
+                top: auto;
+                left: 12px;
+                right: 12px;
+                bottom: 12px;
+                width: auto;
+            }
+
+            #output-canvas {
+                height: 100vh;
+                width: 100vw;
+                border-radius: 0;
+                border: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Initializing camera and pose model...</p>
+        </div>
+
+        <div class="message" id="message"></div>
+
+        <video class="video-input" id="video" autoplay playsinline></video>
+        <canvas id="output-canvas"></canvas>
+
+        <div class="ui">
+            <h1>Mirror Moves Prototype</h1>
+            <div class="chip">Prototype: isolated test build</div>
+
+            <div class="stat-row"><span class="label">Score</span><span class="value" id="score">0</span></div>
+            <div class="stat-row"><span class="label">Streak</span><span class="value" id="streak">0</span></div>
+            <div class="stat-row"><span class="label">Rounds</span><span class="value" id="rounds">0</span></div>
+            <div class="stat-row"><span class="label">Status</span><span class="value" id="status">Ready</span></div>
+
+            <div class="target">
+                <div class="target-title">Current Move</div>
+                <div class="target-name" id="moveName">Press Start</div>
+                <div class="target-hint" id="moveHint">Match the requested pose and hold it.</div>
+                <div class="progress"><div class="progress-fill" id="holdProgress"></div></div>
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-start" onclick="startRound()">Start Round</button>
+                <button class="btn btn-reset" onclick="resetGame()">Reset</button>
+            </div>
+        </div>
+
+        <div class="flash" id="flash">Perfect!</div>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById("video");
+        const canvasElement = document.getElementById("output-canvas");
+        const canvasCtx = canvasElement.getContext("2d");
+        const loading = document.getElementById("loading");
+        const message = document.getElementById("message");
+
+        const ui = {
+            score: document.getElementById("score"),
+            streak: document.getElementById("streak"),
+            rounds: document.getElementById("rounds"),
+            status: document.getElementById("status"),
+            moveName: document.getElementById("moveName"),
+            moveHint: document.getElementById("moveHint"),
+            holdProgress: document.getElementById("holdProgress"),
+            flash: document.getElementById("flash")
+        };
+
+        const HOLD_MS = 1200;
+        const TIMEOUT_MS = 9000;
+        const TRY_NEXT_DELAY_MS = 2200;
+
+        const game = {
+            score: 0,
+            streak: 0,
+            rounds: 0,
+            running: false,
+            currentMove: null,
+            holdStart: null,
+            moveStart: null,
+            timeoutGraceStart: null,
+            lastHint: "Get in frame"
+        };
+
+        function distance(a, b) {
+            return Math.hypot(a.x - b.x, a.y - b.y);
+        }
+
+        function isVisible(p) {
+            return p && (p.visibility === undefined || p.visibility > 0.55);
+        }
+
+        function shoulderWidth(lm) {
+            return distance(lm[11], lm[12]);
+        }
+
+        function elbowAngle(a, b, c) {
+            const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+            let angle = Math.abs((radians * 180) / Math.PI);
+            if (angle > 180) {
+                angle = 360 - angle;
+            }
+            return angle;
+        }
+
+        function pickMove(previousMove) {
+            const moves = [
+                {
+                    id: "right_arm_up",
+                    name: "Raise Right Arm",
+                    desc: "Lift your right hand above shoulder height.",
+                    check: (lm) => {
+                        const rs = lm[12], re = lm[14], rw = lm[16];
+                        if (![rs, re, rw].every(isVisible)) {
+                            return { matched: false, quality: 0, hint: "Right arm not visible" };
+                        }
+                        const angle = elbowAngle(rs, re, rw);
+                        const heightOk = rw.y < rs.y - 0.04;
+                        const straightness = Math.max(0, Math.min(1, (170 - Math.abs(170 - angle)) / 80));
+                        const quality = heightOk ? 0.6 + 0.4 * straightness : 0;
+                        return {
+                            matched: heightOk && angle > 120,
+                            quality,
+                            hint: heightOk ? "Hold still" : "Lift right hand higher"
+                        };
+                    }
+                },
+                {
+                    id: "left_arm_up",
+                    name: "Raise Left Arm",
+                    desc: "Lift your left hand above shoulder height.",
+                    check: (lm) => {
+                        const ls = lm[11], le = lm[13], lw = lm[15];
+                        if (![ls, le, lw].every(isVisible)) {
+                            return { matched: false, quality: 0, hint: "Left arm not visible" };
+                        }
+                        const angle = elbowAngle(ls, le, lw);
+                        const heightOk = lw.y < ls.y - 0.04;
+                        const straightness = Math.max(0, Math.min(1, (170 - Math.abs(170 - angle)) / 80));
+                        const quality = heightOk ? 0.6 + 0.4 * straightness : 0;
+                        return {
+                            matched: heightOk && angle > 120,
+                            quality,
+                            hint: heightOk ? "Hold still" : "Lift left hand higher"
+                        };
+                    }
+                },
+                {
+                    id: "both_arms_t",
+                    name: "Make a T Pose",
+                    desc: "Stretch both arms sideways at shoulder level.",
+                    check: (lm) => {
+                        const ls = lm[11], rs = lm[12], lw = lm[15], rw = lm[16];
+                        if (![ls, rs, lw, rw].every(isVisible)) {
+                            return { matched: false, quality: 0, hint: "Both arms must be visible" };
+                        }
+                        const sw = shoulderWidth(lm) || 0.1;
+                        const leftLevel = Math.abs(lw.y - ls.y) < 0.12;
+                        const rightLevel = Math.abs(rw.y - rs.y) < 0.12;
+                        const span = Math.abs(lw.x - rw.x) / sw;
+                        const spanOk = span > 1.9;
+                        const quality = (leftLevel && rightLevel ? 0.5 : 0.2) + Math.min(0.5, Math.max(0, (span - 1.7) / 0.8));
+                        return {
+                            matched: leftLevel && rightLevel && spanOk,
+                            quality: Math.max(0, Math.min(1, quality)),
+                            hint: spanOk ? "Hold steady" : "Extend both arms wider"
+                        };
+                    }
+                },
+                {
+                    id: "hands_on_hips",
+                    name: "Hands on Hips",
+                    desc: "Place both hands near your hips.",
+                    check: (lm) => {
+                        const lh = lm[23], rh = lm[24], lw = lm[15], rw = lm[16];
+                        if (![lh, rh, lw, rw].every(isVisible)) {
+                            return { matched: false, quality: 0, hint: "Hands or hips not visible" };
+                        }
+                        const sw = shoulderWidth(lm) || 0.1;
+                        const leftNear = distance(lw, lh) / sw < 0.7;
+                        const rightNear = distance(rw, rh) / sw < 0.7;
+                        const quality = (leftNear ? 0.5 : 0.1) + (rightNear ? 0.5 : 0.1);
+                        return {
+                            matched: leftNear && rightNear,
+                            quality: Math.max(0, Math.min(1, quality)),
+                            hint: leftNear && rightNear ? "Nice hold" : "Bring hands closer to hips"
+                        };
+                    }
+                },
+                {
+                    id: "both_arms_up",
+                    name: "Both Arms Up",
+                    desc: "Raise both hands above shoulder level.",
+                    check: (lm) => {
+                        const ls = lm[11], rs = lm[12], lw = lm[15], rw = lm[16];
+                        if (![ls, rs, lw, rw].every(isVisible)) {
+                            return { matched: false, quality: 0, hint: "Both hands must be visible" };
+                        }
+                        const leftUp = lw.y < ls.y - 0.05;
+                        const rightUp = rw.y < rs.y - 0.05;
+                        const quality = (leftUp ? 0.5 : 0.1) + (rightUp ? 0.5 : 0.1);
+                        return {
+                            matched: leftUp && rightUp,
+                            quality: Math.max(0, Math.min(1, quality)),
+                            hint: leftUp && rightUp ? "Great, hold it" : "Raise both hands higher"
+                        };
+                    }
+                },
+                {
+                    id: "right_hand_cross",
+                    name: "Right Hand Across Chest",
+                    desc: "Touch your left shoulder with your right hand.",
+                    check: (lm) => {
+                        const ls = lm[11], rw = lm[16], rs = lm[12];
+                        if (![ls, rw, rs].every(isVisible)) {
+                            return { matched: false, quality: 0, hint: "Right hand or shoulder not visible" };
+                        }
+                        const sw = shoulderWidth(lm) || 0.1;
+                        const closeness = distance(rw, ls) / sw;
+                        const matched = closeness < 0.62;
+                        const quality = Math.max(0, Math.min(1, 1 - (closeness - 0.35)));
+                        return {
+                            matched,
+                            quality,
+                            hint: matched ? "Hold steady" : "Reach right hand across your chest"
+                        };
+                    }
+                },
+                {
+                    id: "left_hand_cross",
+                    name: "Left Hand Across Chest",
+                    desc: "Touch your right shoulder with your left hand.",
+                    check: (lm) => {
+                        const rs = lm[12], lw = lm[15], ls = lm[11];
+                        if (![rs, lw, ls].every(isVisible)) {
+                            return { matched: false, quality: 0, hint: "Left hand or shoulder not visible" };
+                        }
+                        const sw = shoulderWidth(lm) || 0.1;
+                        const closeness = distance(lw, rs) / sw;
+                        const matched = closeness < 0.62;
+                        const quality = Math.max(0, Math.min(1, 1 - (closeness - 0.35)));
+                        return {
+                            matched,
+                            quality,
+                            hint: matched ? "Hold steady" : "Reach left hand across your chest"
+                        };
+                    }
+                },
+                {
+                    id: "right_knee_lift",
+                    name: "Right Knee Lift",
+                    desc: "Lift your right knee to hip level.",
+                    check: (lm) => {
+                        const rh = lm[24], rk = lm[26], ra = lm[28];
+                        if (![rh, rk, ra].every(isVisible)) {
+                            return { matched: false, quality: 0, hint: "Right leg not visible" };
+                        }
+                        const bend = elbowAngle(rh, rk, ra);
+                        const kneeHigh = rk.y < rh.y + 0.12;
+                        const bentEnough = bend < 135;
+                        const quality = (kneeHigh ? 0.55 : 0.15) + (bentEnough ? 0.45 : 0.15);
+                        return {
+                            matched: kneeHigh && bentEnough,
+                            quality: Math.max(0, Math.min(1, quality)),
+                            hint: kneeHigh ? "Hold balance" : "Lift your right knee higher"
+                        };
+                    }
+                },
+                {
+                    id: "left_knee_lift",
+                    name: "Left Knee Lift",
+                    desc: "Lift your left knee to hip level.",
+                    check: (lm) => {
+                        const lh = lm[23], lk = lm[25], la = lm[27];
+                        if (![lh, lk, la].every(isVisible)) {
+                            return { matched: false, quality: 0, hint: "Left leg not visible" };
+                        }
+                        const bend = elbowAngle(lh, lk, la);
+                        const kneeHigh = lk.y < lh.y + 0.12;
+                        const bentEnough = bend < 135;
+                        const quality = (kneeHigh ? 0.55 : 0.15) + (bentEnough ? 0.45 : 0.15);
+                        return {
+                            matched: kneeHigh && bentEnough,
+                            quality: Math.max(0, Math.min(1, quality)),
+                            hint: kneeHigh ? "Hold balance" : "Lift your left knee higher"
+                        };
+                    }
+                },
+                {
+                    id: "mini_squat_hold",
+                    name: "Mini Squat Hold",
+                    desc: "Bend both knees slightly like a mini squat.",
+                    check: (lm) => {
+                        const lh = lm[23], lk = lm[25], la = lm[27];
+                        const rh = lm[24], rk = lm[26], ra = lm[28];
+                        if (![lh, lk, la, rh, rk, ra].every(isVisible)) {
+                            return { matched: false, quality: 0, hint: "Lower body not fully visible" };
+                        }
+                        const leftBend = elbowAngle(lh, lk, la);
+                        const rightBend = elbowAngle(rh, rk, ra);
+                        const leftOk = leftBend < 155;
+                        const rightOk = rightBend < 155;
+                        const quality = (leftOk ? 0.5 : 0.2) + (rightOk ? 0.5 : 0.2);
+                        return {
+                            matched: leftOk && rightOk,
+                            quality: Math.max(0, Math.min(1, quality)),
+                            hint: leftOk && rightOk ? "Great hold" : "Bend both knees a little more"
+                        };
+                    }
+                },
+                {
+                    id: "side_bend_left",
+                    name: "Side Bend Left",
+                    desc: "Slide your left hand down toward your left knee.",
+                    check: (lm) => {
+                        const ls = lm[11], rs = lm[12], lh = lm[23], lw = lm[15], lk = lm[25];
+                        if (![ls, rs, lh, lw, lk].every(isVisible)) {
+                            return { matched: false, quality: 0, hint: "Upper body not fully visible" };
+                        }
+                        const torsoTilt = ls.y - rs.y;
+                        const sw = shoulderWidth(lm) || 0.1;
+                        const handNearKnee = distance(lw, lk) / sw < 0.85;
+                        const matched = torsoTilt > 0.04 || handNearKnee;
+                        const quality = (torsoTilt > 0.04 ? 0.45 : 0.2) + (handNearKnee ? 0.55 : 0.2);
+                        return {
+                            matched,
+                            quality: Math.max(0, Math.min(1, quality)),
+                            hint: matched ? "Hold your lean" : "Lean left and slide left hand down"
+                        };
+                    }
+                },
+                {
+                    id: "side_bend_right",
+                    name: "Side Bend Right",
+                    desc: "Slide your right hand down toward your right knee.",
+                    check: (lm) => {
+                        const ls = lm[11], rs = lm[12], rh = lm[24], rw = lm[16], rk = lm[26];
+                        if (![ls, rs, rh, rw, rk].every(isVisible)) {
+                            return { matched: false, quality: 0, hint: "Upper body not fully visible" };
+                        }
+                        const torsoTilt = rs.y - ls.y;
+                        const sw = shoulderWidth(lm) || 0.1;
+                        const handNearKnee = distance(rw, rk) / sw < 0.85;
+                        const matched = torsoTilt > 0.04 || handNearKnee;
+                        const quality = (torsoTilt > 0.04 ? 0.45 : 0.2) + (handNearKnee ? 0.55 : 0.2);
+                        return {
+                            matched,
+                            quality: Math.max(0, Math.min(1, quality)),
+                            hint: matched ? "Hold your lean" : "Lean right and slide right hand down"
+                        };
+                    }
+                },
+                {
+                    id: "heel_raise",
+                    name: "Heel Raise",
+                    desc: "Rise up on your toes.",
+                    check: (lm) => {
+                        const la = lm[27], ra = lm[28], lheel = lm[29], rheel = lm[30];
+                        if (![la, ra, lheel, rheel].every(isVisible)) {
+                            return { matched: false, quality: 0, hint: "Feet not fully visible" };
+                        }
+                        const leftLift = lheel.y < la.y + 0.03;
+                        const rightLift = rheel.y < ra.y + 0.03;
+                        const quality = (leftLift ? 0.5 : 0.1) + (rightLift ? 0.5 : 0.1);
+                        return {
+                            matched: leftLift && rightLift,
+                            quality: Math.max(0, Math.min(1, quality)),
+                            hint: leftLift && rightLift ? "Stay tall" : "Lift your heels higher"
+                        };
+                    }
+                }
+            ];
+
+            const eligible = moves.filter((m) => !previousMove || m.id !== previousMove.id);
+            return eligible[Math.floor(Math.random() * eligible.length)];
+        }
+
+        function updateUI() {
+            ui.score.textContent = game.score;
+            ui.streak.textContent = game.streak;
+            ui.rounds.textContent = game.rounds;
+            ui.status.textContent = game.running ? "Playing" : "Ready";
+
+            if (!game.currentMove) {
+                ui.moveName.textContent = "Press Start";
+                ui.moveHint.textContent = "Match the requested pose and hold it.";
+            } else {
+                ui.moveName.textContent = game.currentMove.name;
+                ui.moveHint.textContent = game.lastHint || game.currentMove.desc;
+            }
+        }
+
+        function flash(text, color) {
+            ui.flash.textContent = text;
+            ui.flash.style.color = color;
+            ui.flash.classList.add("show");
+            setTimeout(() => ui.flash.classList.remove("show"), 380);
+        }
+
+        function setMessage(text) {
+            message.style.display = "flex";
+            message.innerHTML = `<h2 style="margin-bottom:10px;">Camera Issue</h2><p>${text}</p>`;
+        }
+
+        function setCanvasSize() {
+            const width = videoElement.videoWidth || 1280;
+            const height = videoElement.videoHeight || 720;
+            canvasElement.width = width;
+            canvasElement.height = height;
+        }
+
+        function startRound() {
+            game.running = true;
+            game.currentMove = pickMove(game.currentMove);
+            game.moveStart = performance.now();
+            game.holdStart = null;
+            game.timeoutGraceStart = null;
+            game.lastHint = game.currentMove.desc;
+            ui.holdProgress.style.width = "0%";
+            updateUI();
+        }
+
+        function nextRound() {
+            game.rounds += 1;
+            game.currentMove = pickMove(game.currentMove);
+            game.moveStart = performance.now();
+            game.holdStart = null;
+            game.timeoutGraceStart = null;
+            game.lastHint = game.currentMove.desc;
+            ui.holdProgress.style.width = "0%";
+            updateUI();
+        }
+
+        function resetGame() {
+            game.score = 0;
+            game.streak = 0;
+            game.rounds = 0;
+            game.running = false;
+            game.currentMove = null;
+            game.holdStart = null;
+            game.moveStart = null;
+            game.timeoutGraceStart = null;
+            game.lastHint = "Match the requested pose and hold it.";
+            ui.holdProgress.style.width = "0%";
+            updateUI();
+        }
+
+        function processGame(landmarks, nowMs) {
+            if (!game.running || !game.currentMove) {
+                return;
+            }
+
+            const result = game.currentMove.check(landmarks);
+            game.lastHint = result.hint;
+
+            if (result.matched) {
+                if (!game.holdStart) {
+                    game.holdStart = nowMs;
+                }
+                game.timeoutGraceStart = null;
+                const held = nowMs - game.holdStart;
+                const ratio = Math.max(0, Math.min(1, held / HOLD_MS));
+                ui.holdProgress.style.width = `${Math.round(ratio * 100)}%`;
+
+                if (held >= HOLD_MS) {
+                    game.streak += 1;
+                    const base = 12;
+                    const qualityBonus = Math.round(result.quality * 8);
+                    const streakBonus = Math.min(20, game.streak * 2);
+                    game.score += base + qualityBonus + streakBonus;
+                    flash("Great!", "#6ee7b7");
+                    nextRound();
+                }
+            } else {
+                game.holdStart = null;
+                ui.holdProgress.style.width = "0%";
+
+                const elapsed = nowMs - game.moveStart;
+                if (elapsed > TIMEOUT_MS) {
+                    if (!game.timeoutGraceStart) {
+                        game.timeoutGraceStart = nowMs;
+                        flash("Almost", "#fde68a");
+                    }
+
+                    const graceElapsed = nowMs - game.timeoutGraceStart;
+                    const remainSec = Math.max(0, Math.ceil((TRY_NEXT_DELAY_MS - graceElapsed) / 1000));
+                    game.lastHint = `Adjust pose now - skipping in ${remainSec}s`;
+
+                    if (graceElapsed >= TRY_NEXT_DELAY_MS) {
+                        game.streak = 0;
+                        flash("Try Next", "#fda4af");
+                        nextRound();
+                        return;
+                    }
+                } else {
+                    game.timeoutGraceStart = null;
+                }
+            }
+
+            updateUI();
+        }
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.poseLandmarks) {
+                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {
+                    color: "rgba(34, 211, 238, 0.8)",
+                    lineWidth: 4
+                });
+                drawLandmarks(canvasCtx, results.poseLandmarks, {
+                    color: "rgba(245, 158, 11, 0.85)",
+                    lineWidth: 2,
+                    radius: 5
+                });
+
+                processGame(results.poseLandmarks, performance.now());
+            }
+
+            canvasCtx.restore();
+        }
+
+        const pose = new Pose({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        });
+
+        pose.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            enableSegmentation: false,
+            smoothSegmentation: false,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+
+        pose.onResults(onResults);
+
+        async function initialize() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                loading.style.display = "none";
+                setMessage("Camera API is not available in this browser.");
+                return;
+            }
+
+            try {
+                const camera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        await pose.send({ image: videoElement });
+                    },
+                    width: 1280,
+                    height: 720
+                });
+
+                await camera.start();
+                setCanvasSize();
+                loading.style.display = "none";
+                updateUI();
+            } catch (err) {
+                loading.style.display = "none";
+                setMessage(`Could not start camera. ${err && err.message ? err.message : "Please allow camera access and reload."}`);
+            }
+        }
+
+        window.addEventListener("resize", setCanvasSize);
+        resetGame();
+        initialize();
+    </script>
+</body>
+</html>

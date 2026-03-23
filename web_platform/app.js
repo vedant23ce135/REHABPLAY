@@ -17,6 +17,16 @@ const games = {
         title: 'Finger Coordination Trainer',
         file: 'games/finger_trainer.html',
         description: 'Advanced finger dexterity exercises'
+    },
+    'mirror-moves': {
+        title: 'Mirror Moves',
+        file: 'games/mirror_moves_prototype.html',
+        description: 'Guided full-body pose challenge with hold scoring'
+    },
+    'shape-tracing': {
+        title: 'Shape Tracing',
+        file: 'games/shape_tracing_prototype.html',
+        description: 'Trace guided shapes with hand tracking'
     }
 };
 
