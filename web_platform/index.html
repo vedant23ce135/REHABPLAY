@@ -28,6 +28,50 @@
             --panel: rgba(14, 22, 40, 0.75);
         }
 
+        body.theme-sunburst {
+            --bg-1: #17110a;
+            --bg-2: #35210e;
+            --neon-cyan: #ffd27a;
+            --neon-green: #ffe38f;
+            --neon-rose: #ff944d;
+            --text: #fff5df;
+            --muted: #d3b992;
+            --panel: rgba(47, 28, 11, 0.76);
+        }
+
+        body.theme-meadow {
+            --bg-1: #08150f;
+            --bg-2: #0d2b1d;
+            --neon-cyan: #8fffe1;
+            --neon-green: #b8ff66;
+            --neon-rose: #56d79a;
+            --text: #ebffef;
+            --muted: #9ec5a7;
+            --panel: rgba(10, 36, 24, 0.76);
+        }
+
+        body.theme-ocean {
+            --bg-1: #050f1d;
+            --bg-2: #0c2747;
+            --neon-cyan: #63e7ff;
+            --neon-green: #71d6ff;
+            --neon-rose: #31a9ff;
+            --text: #e8f6ff;
+            --muted: #97b8d4;
+            --panel: rgba(12, 31, 56, 0.78);
+        }
+
+        body.theme-candy {
+            --bg-1: #1e0c26;
+            --bg-2: #3c1238;
+            --neon-cyan: #ff8fcf;
+            --neon-green: #ffb7e6;
+            --neon-rose: #ff58c8;
+            --text: #ffe9fa;
+            --muted: #d5a9c9;
+            --panel: rgba(60, 18, 56, 0.75);
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -42,6 +86,7 @@
             background: radial-gradient(circle at 22% 12%, #1d1337 0%, transparent 36%), radial-gradient(circle at 78% 0%, #083546 0%, transparent 42%), linear-gradient(160deg, var(--bg-1), var(--bg-2));
             color: var(--text);
             font-family: 'Space Grotesk', sans-serif;
+            transition: background 0.45s ease, color 0.35s ease;
         }
 
         body.intro-active,
@@ -1100,6 +1145,11 @@
             width: 62px;
             height: 62px;
             flex: 0 0 auto;
+            --joy-tilt: 0deg;
+            --joy-stick-x: 0px;
+            --joy-stick-y: 0px;
+            --joy-ball-x: 0px;
+            --joy-ball-y: 0px;
         }
 
         .joy-base {
@@ -1120,6 +1170,7 @@
             background: linear-gradient(180deg, #a6b2da, #57638f);
             transform-origin: bottom center;
             animation: stickMove 1.9s ease-in-out infinite;
+            transition: transform 0.15s ease;
         }
 
         .joy-ball {
@@ -1131,6 +1182,16 @@
             border-radius: 50%;
             background: radial-gradient(circle at 25% 22%, #ffa5de, #ff3f9f 75%);
             box-shadow: 0 0 14px rgba(255, 79, 159, 0.7);
+            transition: transform 0.15s ease;
+        }
+
+        .joystick.active .joy-stick {
+            animation: none;
+            transform: translate(var(--joy-stick-x), var(--joy-stick-y)) rotate(var(--joy-tilt));
+        }
+
+        .joystick.active .joy-ball {
+            transform: translate(var(--joy-ball-x), var(--joy-ball-y));
         }
 
         @keyframes stickMove {
@@ -1147,11 +1208,27 @@
         }
 
         .arcade-button {
+            border: none;
             width: 24px;
             height: 24px;
             border-radius: 50%;
             border: 1px solid rgba(255, 255, 255, 0.3);
             box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.55), 0 0 8px rgba(44, 244, 255, 0.35);
+            cursor: pointer;
+            transition: transform 0.14s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        .arcade-button:hover {
+            transform: translateY(-2px);
+        }
+
+        .arcade-button:active {
+            transform: translateY(1px) scale(0.95);
+        }
+
+        .arcade-button.selected {
+            border-color: rgba(255, 255, 255, 0.85);
+            box-shadow: inset 0 -1px 3px rgba(0, 0, 0, 0.5), 0 0 12px rgba(255, 255, 255, 0.52);
         }
 
         .arcade-button.b1 { background: radial-gradient(circle at 30% 25%, #fff4a6, #ffb300 70%); }
@@ -1348,10 +1425,10 @@
                         <div class="joy-ball"></div>
                     </div>
                     <div class="arcade-buttons" aria-hidden="true">
-                        <span class="arcade-button b1"></span>
-                        <span class="arcade-button b2"></span>
-                        <span class="arcade-button b3"></span>
-                        <span class="arcade-button b4"></span>
+                        <button class="arcade-button b1" data-theme="sunburst" type="button" aria-label="Sunburst theme"></button>
+                        <button class="arcade-button b2" data-theme="meadow" type="button" aria-label="Meadow theme"></button>
+                        <button class="arcade-button b3" data-theme="ocean" type="button" aria-label="Ocean theme"></button>
+                        <button class="arcade-button b4" data-theme="candy" type="button" aria-label="Candy theme"></button>
                     </div>
                 </div>
             </div>
@@ -1499,6 +1576,8 @@
         const gameModal = document.getElementById('gameModal');
         const gameFrame = document.getElementById('gameFrame');
         const starfield = document.getElementById('starfield');
+        const joystick = document.querySelector('.joystick');
+        const arcadeButtons = Array.from(document.querySelectorAll('.arcade-button'));
         const gamesGrid = document.getElementById('gamesGrid');
         const gamesAvailableValue = document.getElementById('gamesAvailableValue');
         const patientNameInput = document.getElementById('patientNameInput');
@@ -1574,6 +1653,13 @@
         const ACTIVE_PATIENT_STORAGE_KEY = 'rehabplay.active_patient.v1';
         const PROGRESS_STORAGE_KEY_PREFIX = 'rehabplay.progress.v2.';
         const DAILY_TASK_STORAGE_KEY_PREFIX = 'rehabplay.daily_tasks.v1.';
+        const THEME_STORAGE_KEY = 'rehabplay.theme.v1';
+        const ARCADE_THEMES = {
+            sunburst: 'theme-sunburst',
+            meadow: 'theme-meadow',
+            ocean: 'theme-ocean',
+            candy: 'theme-candy'
+        };
         const apiBase = `${window.location.protocol}//${window.location.hostname}:5000`;
 
         let introBusy = false;
@@ -1587,6 +1673,81 @@
         let currentUserId = 'patient-1';
         let patientDirectory = [];
         let currentLeaderboardGame = 'all';
+
+        function applyTheme(themeId, savePreference) {
+            const themeClass = ARCADE_THEMES[themeId] || ARCADE_THEMES.sunburst;
+            document.body.classList.remove(...Object.values(ARCADE_THEMES));
+            document.body.classList.add(themeClass);
+
+            arcadeButtons.forEach((button) => {
+                button.classList.toggle('selected', button.dataset.theme === themeId);
+            });
+
+            if (savePreference) {
+                localStorage.setItem(THEME_STORAGE_KEY, themeId);
+            }
+        }
+
+        function restoreThemePreference() {
+            const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || 'sunburst';
+            applyTheme(savedTheme, false);
+        }
+
+        function resetJoystickMotion() {
+            if (!joystick) {
+                return;
+            }
+
+            joystick.classList.remove('active');
+            joystick.style.setProperty('--joy-tilt', '0deg');
+            joystick.style.setProperty('--joy-stick-x', '0px');
+            joystick.style.setProperty('--joy-stick-y', '0px');
+            joystick.style.setProperty('--joy-ball-x', '0px');
+            joystick.style.setProperty('--joy-ball-y', '0px');
+        }
+
+        function syncJoystickToPointer(event) {
+            if (!joystick || !document.body.classList.contains('intro-active')) {
+                return;
+            }
+
+            const rect = joystick.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const rawX = event.clientX - centerX;
+            const rawY = event.clientY - centerY;
+            const maxRadius = 13;
+            const distance = Math.hypot(rawX, rawY);
+
+            if (distance > 100) {
+                resetJoystickMotion();
+                return;
+            }
+
+            const scale = distance > maxRadius ? maxRadius / distance : 1;
+            const dx = rawX * scale;
+            const dy = rawY * scale;
+
+            joystick.classList.add('active');
+            joystick.style.setProperty('--joy-tilt', `${(dx / maxRadius) * 14}deg`);
+            joystick.style.setProperty('--joy-stick-x', `${(dx * 0.08).toFixed(2)}px`);
+            joystick.style.setProperty('--joy-stick-y', `${(dy * 0.07).toFixed(2)}px`);
+            joystick.style.setProperty('--joy-ball-x', `${(dx * 0.42).toFixed(2)}px`);
+            joystick.style.setProperty('--joy-ball-y', `${(dy * 0.4).toFixed(2)}px`);
+        }
+
+        function initArcadeControls() {
+            arcadeButtons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    const themeId = button.dataset.theme || 'sunburst';
+                    applyTheme(themeId, true);
+                });
+            });
+
+            window.addEventListener('mouseleave', () => {
+                resetJoystickMotion();
+            });
+        }
 
         async function ensureCameraPermission() {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -2289,6 +2450,7 @@
         function handlePointerMove(event) {
             latestPointer.x = event.clientX;
             latestPointer.y = event.clientY;
+            syncJoystickToPointer(event);
             if (!pointerMoveRaf) {
                 pointerMoveRaf = window.requestAnimationFrame(twinkleNearPointer);
             }
@@ -2644,6 +2806,8 @@
         });
 
         renderGames();
+        restoreThemePreference();
+        initArcadeControls();
         initCardTilt();
         createStarfield();
         scheduleShootingStars();
