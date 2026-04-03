@@ -5,7 +5,7 @@ This allows streaming Python games to web browser
 Run: python flask_server.py
 """
 
-from flask import Flask, render_template, Response, jsonify, request
+from flask import Flask, render_template, Response, jsonify, request, session, redirect, url_for
 from flask_cors import CORS
 import cv2
 import threading
@@ -13,13 +13,74 @@ import base64
 import importlib.util
 import sqlite3
 import hashlib
+import os
+import re
 from pathlib import Path
 from datetime import datetime
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__, 
            static_folder='web_platform',
            template_folder='web_platform')
 CORS(app)
+app.config['SECRET_KEY'] = os.environ.get('REHABPLAY_SECRET_KEY', 'rehabplay-dev-secret-change-me')
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+
+EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+
+def get_auth_context():
+    """Return authenticated user and organization context from session."""
+    user_id = session.get('user_id')
+    org_id = session.get('organization_id')
+    if not user_id or not org_id:
+        return None
+    return {
+        'user_id': int(user_id),
+        'organization_id': int(org_id),
+        'email': session.get('email', ''),
+        'full_name': session.get('full_name', ''),
+        'organization_name': session.get('organization_name', '')
+    }
+
+
+def login_required(view):
+    """Protect routes that require an authenticated session."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not get_auth_context():
+            return redirect(url_for('login_page'))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def api_login_required(view):
+    """Protect API routes that require an authenticated session."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not get_auth_context():
+            return jsonify({'error': 'Authentication required'}), 401
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def normalize_org_name(value):
+    """Normalize organization name for safe storage/display."""
+    text = (value or '').strip()
+    if not text:
+        return ''
+    return ' '.join(text.split())[:80]
+
+
+def safe_display_name(value):
+    """Normalize person display names."""
+    text = (value or '').strip()
+    if not text:
+        return 'Player'
+    return ' '.join(text.split())[:80]
 
 
 @app.after_request
@@ -112,16 +173,16 @@ def build_daily_task_plan(user_id, date_key):
     }
 
 
-def fetch_user_day_sessions(conn, user_id, date_key):
-    """Fetch one user's sessions for a UTC date key (YYYY-MM-DD)."""
+def fetch_user_day_sessions(conn, organization_id, user_id, date_key):
+    """Fetch one user's sessions for an org/date key (YYYY-MM-DD)."""
     return conn.execute(
         """
         SELECT game_id, score, duration_seconds, completed_at
         FROM sessions
-        WHERE user_id = ? AND completed_at LIKE ?
+        WHERE organization_id = ? AND user_id = ? AND completed_at LIKE ?
         ORDER BY completed_at DESC
         """,
-        (user_id, f'{date_key}%')
+        (organization_id, user_id, f'{date_key}%')
     ).fetchall()
 
 
@@ -170,10 +231,53 @@ def crown_for_completed_tasks(completed):
 def init_progress_db():
     """Initialize local progress database."""
     conn = get_db_connection()
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS organizations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            account_type TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            full_name TEXT NOT NULL,
+            organization_id INTEGER NOT NULL,
+            role TEXT NOT NULL DEFAULT 'owner',
+            created_at TEXT NOT NULL,
+            last_login_at TEXT NOT NULL,
+            FOREIGN KEY (organization_id) REFERENCES organizations(id)
+        )
+        """
+    )
+
+
+
+    row = conn.execute("SELECT id FROM organizations ORDER BY id ASC LIMIT 1").fetchone()
+    default_org_id = int(row['id']) if row else None
+    if default_org_id is None:
+        cursor = conn.execute(
+            """
+            INSERT INTO organizations (name, account_type, created_at)
+            VALUES (?, ?, ?)
+            """,
+            ('Legacy Workspace', 'organization', datetime.utcnow().isoformat() + 'Z')
+        )
+        default_org_id = int(cursor.lastrowid)
+
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            organization_id INTEGER NOT NULL DEFAULT 1,
             user_id TEXT NOT NULL,
             patient_name TEXT NOT NULL DEFAULT '',
             game_id TEXT NOT NULL,
@@ -187,15 +291,184 @@ def init_progress_db():
         """
     )
 
-    # Backward-compatible migration for existing DBs created before patient_name.
     cols = [row['name'] for row in conn.execute("PRAGMA table_info(sessions)").fetchall()]
     if 'patient_name' not in cols:
         conn.execute("ALTER TABLE sessions ADD COLUMN patient_name TEXT NOT NULL DEFAULT ''")
+    if 'organization_id' not in cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN organization_id INTEGER NOT NULL DEFAULT 1")
+
+    conn.execute(
+        """
+        UPDATE sessions
+        SET organization_id = ?
+        WHERE organization_id IS NULL OR organization_id <= 0
+        """,
+        (default_org_id,)
+    )
 
     conn.commit()
     conn.close()
 
+
+
+
+@app.route('/login')
+def login_page():
+    """Serve login page."""
+    if get_auth_context():
+        return redirect(url_for('index'))
+    return render_template('auth.html', auth_mode='login')
+
+
+@app.route('/signup')
+def signup_page():
+    """Serve signup page."""
+    if get_auth_context():
+        return redirect(url_for('index'))
+    return render_template('auth.html', auth_mode='signup')
+
+
+@app.route('/logout')
+def logout_page():
+    """Clear session and return to login page."""
+    session.clear()
+    return redirect(url_for('login_page'))
+
+
+@app.route('/api/auth/me')
+def auth_me():
+    """Get current authenticated user context."""
+    auth = get_auth_context()
+    if not auth:
+        return jsonify({'authenticated': False}), 401
+    return jsonify({'authenticated': True, **auth})
+
+
+@app.route('/api/auth/signup', methods=['POST'])
+def auth_signup():
+    """Create a new account and organization, then sign in."""
+    data = request.get_json(silent=True) or {}
+
+    full_name = safe_display_name(data.get('full_name') or '')
+    email = (data.get('email') or '').strip().lower()
+    password = data.get('password') or ''
+    account_type = (data.get('account_type') or 'individual').strip().lower()
+    org_name_raw = data.get('organization_name') or ''
+
+    if account_type not in {'individual', 'organization'}:
+        return jsonify({'error': 'account_type must be individual or organization'}), 400
+    if not EMAIL_RE.match(email):
+        return jsonify({'error': 'A valid email is required'}), 400
+    if len(password) < 8:
+        return jsonify({'error': 'Password must be at least 8 characters'}), 400
+
+    if account_type == 'organization':
+        organization_name = normalize_org_name(org_name_raw)
+        if not organization_name:
+            return jsonify({'error': 'Organization name is required'}), 400
+    else:
+        organization_name = normalize_org_name(org_name_raw) or f"{full_name}'s Space"
+
+    password_hash = generate_password_hash(password)
+    now = datetime.utcnow().isoformat() + 'Z'
+
+    conn = get_db_connection()
+    try:
+        existing = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        if existing:
+            return jsonify({'error': 'Email already registered'}), 409
+
+        org_cursor = conn.execute(
+            """
+            INSERT INTO organizations (name, account_type, created_at)
+            VALUES (?, ?, ?)
+            """,
+            (organization_name, account_type, now)
+        )
+        organization_id = int(org_cursor.lastrowid)
+
+        user_cursor = conn.execute(
+            """
+            INSERT INTO users (email, password_hash, full_name, organization_id, role, created_at, last_login_at)
+            VALUES (?, ?, ?, ?, 'owner', ?, ?)
+            """,
+            (email, password_hash, full_name, organization_id, now, now)
+        )
+        user_id = int(user_cursor.lastrowid)
+        conn.commit()
+    finally:
+        conn.close()
+
+    session['user_id'] = user_id
+    session['organization_id'] = organization_id
+    session['email'] = email
+    session['full_name'] = full_name
+    session['organization_name'] = organization_name
+
+    return jsonify({
+        'status': 'ok',
+        'user': {
+            'user_id': user_id,
+            'organization_id': organization_id,
+            'email': email,
+            'full_name': full_name,
+            'organization_name': organization_name
+        }
+    })
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def auth_login():
+    """Authenticate an existing user."""
+    data = request.get_json(silent=True) or {}
+    email = (data.get('email') or '').strip().lower()
+    password = data.get('password') or ''
+
+    if not EMAIL_RE.match(email):
+        return jsonify({'error': 'A valid email is required'}), 400
+    if not password:
+        return jsonify({'error': 'Password is required'}), 400
+
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            """
+            SELECT
+                u.id AS user_id,
+                u.email,
+                u.password_hash,
+                u.full_name,
+                u.organization_id,
+                o.name AS organization_name
+            FROM users u
+            JOIN organizations o ON o.id = u.organization_id
+            WHERE u.email = ?
+            LIMIT 1
+            """,
+            (email,)
+        ).fetchone()
+
+        if not row or not check_password_hash(row['password_hash'], password):
+            return jsonify({'error': 'Invalid email or password'}), 401
+
+        now = datetime.utcnow().isoformat() + 'Z'
+        conn.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (now, row['user_id']))
+        conn.commit()
+    finally:
+        conn.close()
+
+    session['user_id'] = int(row['user_id'])
+    session['organization_id'] = int(row['organization_id'])
+    session['email'] = row['email']
+    session['full_name'] = row['full_name']
+    session['organization_name'] = row['organization_name']
+
+    return jsonify({'status': 'ok'})
+
+
+
 @app.route('/')
+@login_required
 def index():
     """Serve the main platform page"""
     return render_template('index.html')
@@ -262,8 +535,10 @@ def stop_game():
 
 
 @app.route('/api/progress/session', methods=['POST'])
+@api_login_required
 def save_progress_session():
     """Save one game session result."""
+    auth = get_auth_context()
     data = request.get_json(silent=True) or {}
 
     user_id = (data.get('user_id') or 'demo-user').strip()
@@ -292,10 +567,10 @@ def save_progress_session():
     cursor = conn.execute(
         """
         INSERT INTO sessions (
-            user_id, patient_name, game_id, duration_seconds, score, reps, accuracy, completed_at, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            organization_id, user_id, patient_name, game_id, duration_seconds, score, reps, accuracy, completed_at, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (user_id, patient_name, game_id, duration_seconds, score, reps, accuracy, completed_at, created_at)
+        (auth['organization_id'], user_id, patient_name, game_id, duration_seconds, score, reps, accuracy, completed_at, created_at)
     )
     conn.commit()
     session_id = cursor.lastrowid
@@ -305,8 +580,10 @@ def save_progress_session():
 
 
 @app.route('/api/progress/summary')
+@api_login_required
 def progress_summary():
     """Get summarized progress for a user."""
+    auth = get_auth_context()
     user_id = (request.args.get('user_id') or 'demo-user').strip()
 
     conn = get_db_connection()
@@ -319,9 +596,9 @@ def progress_summary():
             COALESCE(MAX(score), 0) AS best_score,
             COALESCE(MAX(completed_at), '') AS last_played
         FROM sessions
-        WHERE user_id = ?
+        WHERE organization_id = ? AND user_id = ?
         """,
-        (user_id,)
+        (auth['organization_id'], user_id)
     ).fetchone()
 
     per_game_rows = conn.execute(
@@ -333,21 +610,21 @@ def progress_summary():
             COALESCE(AVG(accuracy), 0) AS avg_accuracy,
             COALESCE(SUM(duration_seconds), 0) AS total_duration_seconds
         FROM sessions
-        WHERE user_id = ?
+        WHERE organization_id = ? AND user_id = ?
         GROUP BY game_id
         """,
-        (user_id,)
+        (auth['organization_id'], user_id)
     ).fetchall()
 
     recent_rows = conn.execute(
         """
         SELECT game_id, score, reps, accuracy, duration_seconds, completed_at
         FROM sessions
-        WHERE user_id = ?
+        WHERE organization_id = ? AND user_id = ?
         ORDER BY completed_at DESC
         LIMIT 10
         """,
-        (user_id,)
+        (auth['organization_id'], user_id)
     ).fetchall()
 
     conn.close()
@@ -364,8 +641,10 @@ def progress_summary():
 
 
 @app.route('/api/patients')
+@api_login_required
 def list_patients():
     """Search/list patients with usage metadata for switch/search UI."""
+    auth = get_auth_context()
     query = (request.args.get('q') or '').strip()
     normalized_query = query.lower()
 
@@ -398,12 +677,12 @@ def list_patients():
                     COALESCE(SUM(s.score), 0)
                 ) AS total_points
             FROM sessions s
-            WHERE LOWER(s.user_id) LIKE ? OR LOWER(s.patient_name) LIKE ?
+            WHERE s.organization_id = ? AND (LOWER(s.user_id) LIKE ? OR LOWER(s.patient_name) LIKE ?)
             GROUP BY s.user_id
             ORDER BY last_used DESC
             LIMIT ?
             """,
-            (like, like, limit)
+            (auth['organization_id'], like, like, limit)
         ).fetchall()
     else:
         rows = conn.execute(
@@ -426,11 +705,12 @@ def list_patients():
                     COALESCE(SUM(s.score), 0)
                 ) AS total_points
             FROM sessions s
+            WHERE s.organization_id = ?
             GROUP BY s.user_id
             ORDER BY last_used DESC
             LIMIT ?
             """,
-            (limit,)
+            (auth['organization_id'], limit)
         ).fetchall()
     conn.close()
 
@@ -445,14 +725,19 @@ def list_patients():
 
 
 @app.route('/api/progress/patient_data', methods=['DELETE'])
+@api_login_required
 def delete_patient_data():
     """Delete all sessions for a patient/user profile."""
+    auth = get_auth_context()
     user_id = (request.args.get('user_id') or '').strip()
     if not user_id:
         return jsonify({'error': 'user_id is required'}), 400
 
     conn = get_db_connection()
-    cursor = conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+    cursor = conn.execute(
+        "DELETE FROM sessions WHERE organization_id = ? AND user_id = ?",
+        (auth['organization_id'], user_id)
+    )
     conn.commit()
     deleted = cursor.rowcount if cursor.rowcount is not None else 0
     conn.close()
@@ -461,8 +746,10 @@ def delete_patient_data():
 
 
 @app.route('/api/progress/leaderboard')
+@api_login_required
 def progress_leaderboard():
     """Get leaderboard across all patients using a blended points formula."""
+    auth = get_auth_context()
     try:
         limit = int(request.args.get('limit', 10))
     except (TypeError, ValueError):
@@ -470,11 +757,13 @@ def progress_leaderboard():
     limit = max(1, min(limit, 50))
 
     game_id = (request.args.get('game_id') or '').strip()
-    game_filter_sql = ''
-    query_params = []
+    where_parts = ['s.organization_id = ?']
+    query_params = [auth['organization_id']]
     if game_id:
-        game_filter_sql = 'WHERE s.game_id = ?'
+        where_parts.append('s.game_id = ?')
         query_params.append(game_id)
+
+    where_sql = 'WHERE ' + ' AND '.join(where_parts)
 
     conn = get_db_connection()
     date_key = datetime.utcnow().strftime('%Y-%m-%d')
@@ -502,7 +791,7 @@ def progress_leaderboard():
                 COALESCE(SUM(s.score), 0)
             ) AS total_points
         FROM sessions s
-        {game_filter_sql}
+        {where_sql}
         GROUP BY s.user_id
         ORDER BY total_points DESC, total_score DESC, sessions DESC, last_played DESC
         LIMIT ?
@@ -517,7 +806,7 @@ def progress_leaderboard():
             entry['patient_name'] = display_name_from_user_id(entry.get('user_id', ''))
 
         plan = build_daily_task_plan(entry.get('user_id', ''), date_key)
-        day_sessions = fetch_user_day_sessions(conn, entry.get('user_id', ''), date_key)
+        day_sessions = fetch_user_day_sessions(conn, auth['organization_id'], entry.get('user_id', ''), date_key)
         evaluation = evaluate_daily_tasks(plan, day_sessions)
         crown = crown_for_completed_tasks(evaluation['completed'])
         entry['crown_tier'] = crown['tier']
@@ -535,15 +824,17 @@ def progress_leaderboard():
 
 
 @app.route('/api/progress/daily_tasks')
+@api_login_required
 def progress_daily_tasks():
     """Get deterministic daily tasks, progress, and crown tier for one user."""
+    auth = get_auth_context()
     user_id = (request.args.get('user_id') or 'demo-user').strip()
     date_key = datetime.utcnow().strftime('%Y-%m-%d')
 
     plan = build_daily_task_plan(user_id, date_key)
 
     conn = get_db_connection()
-    day_sessions = fetch_user_day_sessions(conn, user_id, date_key)
+    day_sessions = fetch_user_day_sessions(conn, auth['organization_id'], user_id, date_key)
     conn.close()
 
     evaluation = evaluate_daily_tasks(plan, day_sessions)
@@ -590,11 +881,16 @@ def video_feed():
 
 if __name__ == '__main__':
     init_progress_db()
+    server_host = os.environ.get('REHABPLAY_HOST', '0.0.0.0')
+    server_port = int(os.environ.get('REHABPLAY_PORT', '5000'))
+    server_debug = os.environ.get('REHABPLAY_DEBUG', '1') == '1'
+
     print("="*60)
     print("🏥 Rehab Games Platform Server")
     print("="*60)
     print("Starting Flask server...")
+    print(f"Host: {server_host}  Port: {server_port}  Debug: {server_debug}")
     print("Open your browser to: http://localhost:5000")
     print("Press Ctrl+C to stop")
     print("="*60)
-    app.run(debug=True, threaded=True, port=5000)
+    app.run(host=server_host, debug=server_debug, threaded=True, port=server_port)

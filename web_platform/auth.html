@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RehabPlay Access</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Monoton&family=Rajdhani:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-1: #050912;
+            --bg-2: #0b1222;
+            --neon-cyan: #2cf4ff;
+            --neon-green: #ccff4d;
+            --neon-rose: #ff4f9f;
+            --text: #eaf6ff;
+            --muted: #98abc0;
+            --panel: rgba(12, 20, 38, 0.78);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 22% 12%, rgba(255, 79, 159, 0.16), transparent 42%),
+                radial-gradient(circle at 78% 0%, rgba(44, 244, 255, 0.18), transparent 46%),
+                linear-gradient(158deg, var(--bg-1), var(--bg-2));
+            display: grid;
+            place-items: center;
+            padding: 24px;
+        }
+
+        .shell {
+            width: min(920px, 100%);
+            display: grid;
+            grid-template-columns: 1.05fr 1fr;
+            border-radius: 22px;
+            overflow: hidden;
+            border: 1px solid rgba(44, 244, 255, 0.3);
+            box-shadow: 0 26px 60px rgba(0, 0, 0, 0.45);
+            background: var(--panel);
+            backdrop-filter: blur(10px);
+        }
+
+        .brand {
+            padding: 36px;
+            border-right: 1px solid rgba(44, 244, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .brand h1 {
+            font-family: Monoton, cursive;
+            font-weight: 400;
+            letter-spacing: 1.4px;
+            font-size: clamp(1.5rem, 3.2vw, 2.2rem);
+            color: #e4fbff;
+            text-shadow: 0 0 14px rgba(44, 244, 255, 0.7);
+        }
+
+        .brand p {
+            color: var(--muted);
+            line-height: 1.6;
+            max-width: 34ch;
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .chip {
+            border: 1px solid rgba(44, 244, 255, 0.26);
+            background: rgba(44, 244, 255, 0.1);
+            color: #dffcff;
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: 0.82rem;
+            letter-spacing: 0.4px;
+        }
+
+        .panel {
+            padding: 32px 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .mode-toggle {
+            display: flex;
+            gap: 10px;
+            background: rgba(5, 13, 27, 0.5);
+            padding: 6px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .mode-btn {
+            flex: 1;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            color: #bdd0e7;
+            background: transparent;
+            cursor: pointer;
+            transition: 0.2s ease;
+        }
+
+        .mode-btn.active {
+            color: #081220;
+            background: linear-gradient(90deg, var(--neon-green), #ebff8f);
+            box-shadow: 0 0 16px rgba(204, 255, 77, 0.45);
+        }
+
+        .form {
+            display: none;
+            gap: 12px;
+        }
+
+        .form.active {
+            display: grid;
+        }
+
+        label {
+            font-size: 0.86rem;
+            color: #bed0e4;
+        }
+
+        input, select {
+            width: 100%;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(3, 10, 22, 0.74);
+            color: #e8faff;
+            padding: 11px 12px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            outline: none;
+        }
+
+        input:focus, select:focus {
+            border-color: rgba(44, 244, 255, 0.66);
+            box-shadow: 0 0 0 2px rgba(44, 244, 255, 0.16);
+        }
+
+        .account-type-wrap {
+            display: grid;
+            gap: 10px;
+        }
+
+        .primary {
+            margin-top: 6px;
+            border: none;
+            border-radius: 999px;
+            padding: 12px 18px;
+            font-family: Rajdhani, sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.9px;
+            text-transform: uppercase;
+            color: #081423;
+            background: linear-gradient(90deg, var(--neon-cyan), #7ff5ff);
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+
+        .primary:hover {
+            transform: translateY(-2px);
+        }
+
+        .hint {
+            font-size: 0.85rem;
+            color: var(--muted);
+            line-height: 1.45;
+        }
+
+        .feedback {
+            min-height: 20px;
+            font-size: 0.88rem;
+            color: #ffbfcf;
+        }
+
+        .feedback.ok {
+            color: #baffd6;
+        }
+
+        @media (max-width: 860px) {
+            .shell {
+                grid-template-columns: 1fr;
+            }
+
+            .brand {
+                border-right: none;
+                border-bottom: 1px solid rgba(44, 244, 255, 0.2);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <aside class="brand">
+            <div>
+                <h1>RehabPlay Access</h1>
+                <p>Sign in or create your workspace. Choose Individual for personal patient tracking, or Organization for multi-patient team therapy.</p>
+            </div>
+            <div class="chips">
+                <span class="chip">Secure Session</span>
+                <span class="chip">Org-Scoped Scores</span>
+                <span class="chip">Leaderboard Ready</span>
+            </div>
+        </aside>
+
+        <section class="panel">
+            <div class="mode-toggle">
+                <button class="mode-btn" id="loginTab" type="button">Login</button>
+                <button class="mode-btn" id="signupTab" type="button">Sign Up</button>
+            </div>
+
+            <form class="form" id="loginForm">
+                <div>
+                    <label for="loginEmail">Email</label>
+                    <input id="loginEmail" type="email" required autocomplete="email">
+                </div>
+                <div>
+                    <label for="loginPassword">Password</label>
+                    <input id="loginPassword" type="password" required autocomplete="current-password">
+                </div>
+                <button class="primary" type="submit">Login</button>
+                <p class="hint">Use your registered account email and password.</p>
+            </form>
+
+            <form class="form" id="signupForm">
+                <div>
+                    <label for="signupName">Full Name</label>
+                    <input id="signupName" type="text" required maxlength="80" autocomplete="name">
+                </div>
+                <div>
+                    <label for="signupEmail">Email</label>
+                    <input id="signupEmail" type="email" required autocomplete="email">
+                </div>
+                <div>
+                    <label for="signupPassword">Password</label>
+                    <input id="signupPassword" type="password" required minlength="8" autocomplete="new-password">
+                </div>
+                <div class="account-type-wrap">
+                    <div>
+                        <label for="accountType">Account Type</label>
+                        <select id="accountType">
+                            <option value="individual">Individual</option>
+                            <option value="organization">Organization</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="organizationName">Organization Name (required for Organization)</label>
+                        <input id="organizationName" type="text" maxlength="80" placeholder="Your clinic or team name">
+                    </div>
+                </div>
+                <button class="primary" type="submit">Create Account</button>
+                <p class="hint">For Individual accounts, we auto-create your personal workspace if org name is blank.</p>
+            </form>
+
+            <p class="feedback" id="feedback"></p>
+        </section>
+    </div>
+
+    <script>
+        const initialMode = '{{ auth_mode|default("login") }}';
+        const loginTab = document.getElementById('loginTab');
+        const signupTab = document.getElementById('signupTab');
+        const loginForm = document.getElementById('loginForm');
+        const signupForm = document.getElementById('signupForm');
+        const feedback = document.getElementById('feedback');
+
+        function setMode(mode) {
+            const isLogin = mode === 'login';
+            loginTab.classList.toggle('active', isLogin);
+            signupTab.classList.toggle('active', !isLogin);
+            loginForm.classList.toggle('active', isLogin);
+            signupForm.classList.toggle('active', !isLogin);
+            history.replaceState({}, '', isLogin ? '/login' : '/signup');
+            feedback.textContent = '';
+            feedback.classList.remove('ok');
+        }
+
+        function setFeedback(message, ok) {
+            feedback.textContent = message || '';
+            feedback.classList.toggle('ok', Boolean(ok));
+        }
+
+        async function submitJson(url, payload) {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            let data = {};
+            try {
+                data = await response.json();
+            } catch (error) {
+                data = {};
+            }
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Request failed');
+            }
+
+            return data;
+        }
+
+        loginTab.addEventListener('click', () => setMode('login'));
+        signupTab.addEventListener('click', () => setMode('signup'));
+
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            setFeedback('Signing in...', true);
+
+            try {
+                await submitJson('/api/auth/login', {
+                    email: document.getElementById('loginEmail').value.trim(),
+                    password: document.getElementById('loginPassword').value
+                });
+                setFeedback('Login successful. Redirecting...', true);
+                window.location.assign('/');
+            } catch (error) {
+                setFeedback(error.message || 'Login failed', false);
+            }
+        });
+
+        signupForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            setFeedback('Creating account...', true);
+
+            try {
+                await submitJson('/api/auth/signup', {
+                    full_name: document.getElementById('signupName').value.trim(),
+                    email: document.getElementById('signupEmail').value.trim(),
+                    password: document.getElementById('signupPassword').value,
+                    account_type: document.getElementById('accountType').value,
+                    organization_name: document.getElementById('organizationName').value.trim()
+                });
+                setFeedback('Account created. Redirecting...', true);
+                window.location.assign('/');
+            } catch (error) {
+                setFeedback(error.message || 'Sign up failed', false);
+            }
+        });
+
+        setMode(initialMode === 'signup' ? 'signup' : 'login');
+    </script>
+</body>
+</html>

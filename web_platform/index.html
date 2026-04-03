@@ -299,6 +299,34 @@
             justify-content: flex-end;
         }
 
+        .auth-chip {
+            border: 1px solid rgba(44, 244, 255, 0.35);
+            background: rgba(44, 244, 255, 0.1);
+            color: #dffbff;
+            border-radius: 999px;
+            padding: 8px 13px;
+            font-size: 0.8rem;
+            letter-spacing: 0.35px;
+            white-space: nowrap;
+        }
+
+        .logout-btn {
+            border: 1px solid rgba(255, 121, 121, 0.5);
+            background: rgba(255, 121, 121, 0.16);
+            color: #ffd7d7;
+            border-radius: 999px;
+            padding: 9px 14px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.16s ease, box-shadow 0.16s ease;
+        }
+
+        .logout-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 18px rgba(255, 121, 121, 0.2);
+        }
+
         .patient-controls {
             position: relative;
             z-index: 45;
@@ -1449,6 +1477,7 @@
                 <h1>RehabPlay</h1>
             </div>
             <div class="topbar-actions">
+                <span class="auth-chip" id="orgInfoTag">Workspace</span>
                 <div class="patient-controls">
                     <label for="patientNameInput">Patient</label>
                     <input class="patient-input" id="patientNameInput" type="text" maxlength="40" placeholder="Enter patient name" list="patientNameOptions">
@@ -1459,6 +1488,7 @@
                     <div class="patient-search-results" id="patientSearchResults"></div>
                 </div>
                 <button class="home-btn" id="homeBtn"><i class="fas fa-home"></i> Home</button>
+                <button class="logout-btn" id="logoutBtn" type="button">Logout</button>
             </div>
         </header>
 
@@ -1572,6 +1602,8 @@
         const startBtn = document.getElementById('startBtn');
         const startPanel = document.getElementById('startPanel');
         const homeBtn = document.getElementById('homeBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const orgInfoTag = document.getElementById('orgInfoTag');
         const warpFlash = document.getElementById('warpFlash');
         const gameModal = document.getElementById('gameModal');
         const gameFrame = document.getElementById('gameFrame');
@@ -1660,7 +1692,7 @@
             ocean: 'theme-ocean',
             candy: 'theme-candy'
         };
-        const apiBase = `${window.location.protocol}//${window.location.hostname}:5000`;
+        const apiBase = window.location.origin;
 
         let introBusy = false;
         let pointerMoveRaf = null;
@@ -1761,6 +1793,21 @@
 
             // Release immediately; each game will open its own camera stream.
             stream.getTracks().forEach((track) => track.stop());
+        }
+
+        async function loadAuthContext() {
+            try {
+                const response = await fetch('/api/auth/me');
+                if (!response.ok) {
+                    throw new Error('Not authenticated');
+                }
+                const payload = await response.json();
+                const fullName = payload.full_name || 'Player';
+                const orgName = payload.organization_name || 'Workspace';
+                orgInfoTag.textContent = `${fullName} | ${orgName}`;
+            } catch (error) {
+                window.location.assign('/login');
+            }
         }
 
         function showCameraHelp(error) {
@@ -2723,6 +2770,10 @@
             showIntro(true);
         });
 
+        logoutBtn.addEventListener('click', () => {
+            window.location.assign('/logout');
+        });
+
         exportProgressBtn.addEventListener('click', () => {
             const snapshot = readLocalProgress();
             const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
@@ -2805,6 +2856,7 @@
             }
         });
 
+        loadAuthContext();
         renderGames();
         restoreThemePreference();
         initArcadeControls();

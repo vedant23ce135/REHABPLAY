@@ -64,6 +64,26 @@
 
 3. Visit `http://localhost:5000`
 
+### **Option 3: Shared Live Data Across Computers (Recommended)**
+
+If you want your teammate at home to see the same users, patients, scores, and leaderboard in real time, both of you must use one central running server.
+
+1. Pick one machine to be the server host.
+2. Start Flask on that host (already supported):
+   ```powershell
+   $env:REHABPLAY_HOST="0.0.0.0"
+   $env:REHABPLAY_PORT="5000"
+   python flask_server.py
+   ```
+3. Allow inbound TCP port 5000 in Windows Firewall on host machine.
+4. Give teammates the host public URL/IP.
+5. Teammates open that URL in browser and use login/signup there.
+
+Important:
+- Git commits do not provide live database sync.
+- Committing `progress_data.db` only shares snapshots, not real-time data.
+- For production, use PostgreSQL + cloud hosting for the server.
+
 ---
 
 ## 📋 Requirements
