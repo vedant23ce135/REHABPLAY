@@ -2388,13 +2388,15 @@
 
         async function saveSessionBackend(sessionPayload) {
             try {
-                await fetch(`${apiBase}/api/progress/session`, {
+                const response = await fetch(`${apiBase}/api/progress/session`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(sessionPayload)
                 });
+                return response.ok;
             } catch (error) {
                 // Keep local data even if backend is offline.
+                return false;
             }
         }
 
@@ -2671,7 +2673,7 @@
             }
         }
 
-        function closeAndPersistSession() {
+        async function closeAndPersistSession() {
             if (!activeSession) {
                 return;
             }
@@ -2692,9 +2694,10 @@
             };
 
             appendSessionLocal(payload);
-            saveSessionBackend(payload);
-            loadLeaderboard();
-            loadPatientDirectory(currentPatientName);
+            await saveSessionBackend(payload);
+            await loadProgress();
+            await loadLeaderboard();
+            await loadPatientDirectory(currentPatientName);
             activeSession = null;
         }
 
@@ -2729,7 +2732,7 @@
         }
 
         function closeGame() {
-            closeAndPersistSession();
+            void closeAndPersistSession();
             gameModal.classList.remove('active');
             gameFrame.src = '';
         }
