@@ -278,6 +278,7 @@ def init_progress_db():
         CREATE TABLE IF NOT EXISTS sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             organization_id INTEGER NOT NULL DEFAULT 1,
+            organization_name TEXT NOT NULL DEFAULT '',
             user_id TEXT NOT NULL,
             patient_name TEXT NOT NULL DEFAULT '',
             game_id TEXT NOT NULL,
@@ -296,6 +297,8 @@ def init_progress_db():
         conn.execute("ALTER TABLE sessions ADD COLUMN patient_name TEXT NOT NULL DEFAULT ''")
     if 'organization_id' not in cols:
         conn.execute("ALTER TABLE sessions ADD COLUMN organization_id INTEGER NOT NULL DEFAULT 1")
+    if 'organization_name' not in cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN organization_name TEXT NOT NULL DEFAULT ''")
 
     conn.execute(
         """
@@ -304,6 +307,19 @@ def init_progress_db():
         WHERE organization_id IS NULL OR organization_id <= 0
         """,
         (default_org_id,)
+    )
+
+    conn.execute(
+        """
+        UPDATE sessions
+        SET organization_name = (
+            SELECT o.name
+            FROM organizations o
+            WHERE o.id = sessions.organization_id
+            LIMIT 1
+        )
+        WHERE organization_name IS NULL OR organization_name = ''
+        """
     )
 
     conn.commit()
@@ -567,10 +583,22 @@ def save_progress_session():
     cursor = conn.execute(
         """
         INSERT INTO sessions (
-            organization_id, user_id, patient_name, game_id, duration_seconds, score, reps, accuracy, completed_at, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            organization_id, organization_name, user_id, patient_name, game_id, duration_seconds, score, reps, accuracy, completed_at, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (auth['organization_id'], user_id, patient_name, game_id, duration_seconds, score, reps, accuracy, completed_at, created_at)
+        (
+            auth['organization_id'],
+            auth.get('organization_name', ''),
+            user_id,
+            patient_name,
+            game_id,
+            duration_seconds,
+            score,
+            reps,
+            accuracy,
+            completed_at,
+            created_at
+        )
     )
     conn.commit()
     session_id = cursor.lastrowid
